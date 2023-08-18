@@ -99,7 +99,7 @@
                             </div>
                         </div>
                         <div class="kiss-flex-1"></div>
-                        <?php if ($this->helper('acl')->isAllowed("content/models/manage")): ?>
+                        <?php if ($this->helper('acl')->isAllowed("content/:models/manage")): ?>
                         <a class="kiss-button kiss-button-primary" href="<?=$this->route('/content/models/create')?>"><?=t('Create model')?></a>
                         <?php endif ?>
                     </div>
@@ -127,7 +127,7 @@
                                 </li>
                                 <li v-if="actionModel.type=='collection'">
                                     <a class="kiss-flex kiss-flex-middle" :href="$route(`/content/collection/item/${actionModel.name}`)">
-                                        <icon class="kiss-margin-small-right">add_circle_outline</icon>
+                                        <icon class="kiss-margin-small-right">add_circle</icon>
                                         <?=t('Create item')?>
                                     </a>
                                 </li>
@@ -303,7 +303,7 @@
 
 <div class="kiss-margin" id="content-models-aside"></div>
 
-<?php if (1==2 && $this->helper('acl')->isAllowed("content/models/manage")): ?>
+<?php if (1==2 && $this->helper('acl')->isAllowed("content/:models/manage")): ?>
 <kiss-navlist>
     <ul>
         <li class="kiss-nav-header kiss-margin-top kiss-margin-xsmall-bottom"><?=t('Create')?></li>

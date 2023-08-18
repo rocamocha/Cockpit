@@ -10,7 +10,7 @@ class Tower extends App {
 
     protected function before() {
 
-        if (!$this->isAllowed('system/tower')) {
+        if (!$this->helper('acl')->isSuperAdmin()) {
             return $this->stop(401);
         }
 
@@ -28,6 +28,8 @@ class Tower extends App {
 
 
     public function exec() {
+
+        $this->hasValidCsrfToken(true);
 
         $command = trim($this->param('command', ''));
 

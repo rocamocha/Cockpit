@@ -251,6 +251,9 @@ export default {
 
             xhr.open('POST', App.route(`/finder/buckets/api/${this.bucket}`));
 
+            xhr.setRequestHeader('X-CSRF-TOKEN', App.csrf);
+            xhr.setRequestHeader('X-Requested-With', 'XMLHttpRequest');
+
             this.uploading = 0;
 
             xhr.upload.addEventListener('progress', ({loaded, total}) => {
@@ -407,7 +410,7 @@ export default {
                             </li>
                             <li>
                                 <a class="kiss-flex kiss-flex-middle" @click="rename(actionFolder)">
-                                    <icon class="kiss-margin-small-right" size="larger">drive_file_rename_outline</icon>
+                                    <icon class="kiss-margin-small-right" size="larger">bookmark_manager</icon>
                                     {{ t('Rename') }}
                                 </a>
                             </li>

@@ -205,7 +205,7 @@ del { background: #c92a2a }
 
 .app-container-aside-menu kiss-navlist ul > li > a {
     color: inherit;
-    opacity: .65;
+    opacity: .5;
     transition: all 250ms;
 }
 
@@ -358,6 +358,11 @@ app-actionbar kiss-container {
 
 [field="boolean"] {
     font-size: .95em;
+}
+
+[field="boolean"] label{
+    all: unset;
+    cursor: pointer;
 }
 
 .fields-renderer[nested="true"] .fields-renderer-field {

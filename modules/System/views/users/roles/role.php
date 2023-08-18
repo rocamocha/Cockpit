@@ -56,6 +56,11 @@
 
                 <input class="kiss-input kiss-width-1-1" type="text" :placeholder="t('Filter groups...')" v-model="filter">
 
+                <div class="kiss-button-group kiss-margin">
+                    <button type="button" class="kiss-button kiss-button-small" @click="Object.keys(permissions).forEach(group => visible[group] = true)">{{ t('Open all') }}</button>
+                    <button type="button" class="kiss-button kiss-button-small" @click="Object.keys(permissions).forEach(group => visible[group] = false)">{{ t('Collapse all') }}</button>
+                </div>
+
                 <kiss-card class="kiss-margin kiss-padding" theme="bordered contrast" hover="shadow" v-for="(permissions, group) in simplePermissions">
 
                     <div class="kiss-flex kiss-flex-middle" :class="{'kiss-color-muted': !visible[group]}" @click="visible[group]=!visible[group]">
@@ -65,13 +70,8 @@
                     </div>
 
                     <div class="kiss-margin" :class="{'kiss-hidden': !visible[group]}">
-                        <div class="kiss-margin-small kiss-size-small kiss-flex kiss-middle" v-for="(label, permission) in permissions">
-                            <div><field-boolean v-model="role.permissions[permission]"></field-boolean></div>
-                            <div class="kiss-flex-1 kiss-margin-small-left">
-                                <div :class="{'kiss-color-muted':!role.permissions[permission]}">
-                                    {{label}}
-                                </div>
-                            </div>
+                        <div class="kiss-margin-small kiss-size-small" v-for="(label, permission) in permissions">
+                            <field-boolean v-model="role.permissions[permission]" :label="label"></field-boolean>
                         </div>
                     </div>
 

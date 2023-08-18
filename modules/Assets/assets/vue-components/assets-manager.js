@@ -5,7 +5,7 @@ function getUppy(meta = {}) {
         autoProceed: false,
         restrictions: {
             maxFileSize: App._vars.maxUploadSize || null,
-            //maxNumberOfFiles: 3,
+            maxNumberOfFiles: App._vars.maxFileUploads || 20,
             minNumberOfFiles: 1,
             //allowedFileTypes: ['image/*', 'video/*']
         },
@@ -17,6 +17,9 @@ function getUppy(meta = {}) {
         browserBackButtonClose: false
     }).use(Uppy.XHRUpload, {
         endpoint: App.route('/assets/upload'),
+        headers: {
+            'X-CSRF-TOKEN': App.csrf
+        },
         bundle: true
     }).use(Uppy.Webcam, { target: Uppy.Dashboard, showVideoSourceDropdown: true })
     .use(Uppy.ScreenCapture, { target: Uppy.Dashboard })
@@ -317,7 +320,7 @@ export default {
                             <a class="kiss-cover" @click="selectedAsset=asset" v-if="modal"></a>
                         </div>
                         <div class="kiss-padding kiss-flex kiss-flex-middle">
-                            <div class="kiss-text-truncate kiss-size-xsmall kiss-flex-1"><a class="kiss-link-muted" @click="edit(asset)">{{ App.utils.truncate(asset.title, 25) }}</a></div>
+                            <div class="kiss-text-truncate kiss-size-xsmall kiss-flex-1"><a class="kiss-link-muted" @click="edit(asset)">{{ asset.title }}</a></div>
                             <a class="kiss-margin-small-left" @click="toggleAssetActions(asset)"><icon>more_horiz</icon></a>
                         </div>
                     </kiss-card>
@@ -426,7 +429,7 @@ export default {
                             </li>
                             <li>
                                 <a class="kiss-flex kiss-flex-middle" @click="renameFolder(actionFolder)">
-                                    <icon class="kiss-margin-small-right" size="larger">drive_file_rename_outline</icon>
+                                    <icon class="kiss-margin-small-right" size="larger">bookmark_manager</icon>
                                     {{ t('Rename') }}
                                 </a>
                             </li>

@@ -403,19 +403,46 @@
       }
   });
 
+  function isInViewport(element) {
+      const rect = element.getBoundingClientRect();
+      return (
+          rect.top >= 0 &&
+          rect.left >= 0 &&
+          rect.bottom <= (window.innerHeight || document.documentElement.clientHeight) &&
+          rect.right <= (window.innerWidth || document.documentElement.clientWidth)
+      );
+  }
+
+  function isElementOnTop(element) {
+      const rect = element.getBoundingClientRect();
+      let topElement = document.elementFromPoint(rect.left + rect.width / 2, rect.top + rect.height / 2);
+      while (topElement && topElement.parentElement) {
+          if (topElement === element) {
+              return true;
+          }
+          topElement = topElement.parentElement;
+      }
+      return false;
+  }
+
   on$1(document.documentElement, 'keyup', function (e) {
 
       if (!['Esc', 'Escape'].includes(e.key)) {
           return;
       }
 
-      let last = null;
+      let elements = document.querySelectorAll('kiss-dialog[open="true"][esc="true"]'), ele;
 
-      document.querySelectorAll('kiss-dialog[open="true"][esc="true"]').forEach(dialog => {
-          last = dialog;
-      });
+      for (let i = 0; i < elements.length; i++) {
 
-      if (last) last.close();
+          ele = elements[i];
+
+          if (isElementOnTop(ele)) {
+              e.stopImmediatePropagation();
+              ele.close();
+              break;
+          }
+      }
   });
 
   customElements.define('kiss-dialog', class extends HTMLElement {
@@ -460,6 +487,27 @@
       }
   });
 
+  on$1(document.documentElement, 'keyup', function (e) {
+
+      if (!['Esc', 'Escape'].includes(e.key)) {
+          return;
+      }
+
+      let elements = document.querySelectorAll('kiss-offcanvas[open="true"]'), ele;
+
+      for (let i = 0; i < elements.length; i++) {
+
+          ele = elements[i];
+
+          if (isElementOnTop(ele)) {
+              e.stopImmediatePropagation();
+              ele.close();
+              break;
+          }
+      }
+
+  });
+
   customElements.define('kiss-offcanvas', class extends HTMLElement {
 
       connectedCallback() {
@@ -500,16 +548,6 @@
       }
   });
 
-  function isInViewport(element) {
-      const rect = element.getBoundingClientRect();
-      return (
-          rect.top >= 0 &&
-          rect.left >= 0 &&
-          rect.bottom <= (window.innerHeight || document.documentElement.clientHeight) &&
-          rect.right <= (window.innerWidth || document.documentElement.clientWidth)
-      );
-  }
-
   on$1(document.documentElement, 'click', '[kiss-popout]', function (e) {
 
       e.preventDefault();
@@ -521,6 +559,26 @@
           let position = this.getAttribute('kiss-popout-pos');
 
           menu.show(position ? this : null, position);
+      }
+  });
+
+  on$1(document.documentElement, 'keyup', function (e) {
+
+      if (!['Esc', 'Escape'].includes(e.key)) {
+          return;
+      }
+
+      let elements = document.querySelectorAll('kiss-popout[open="true"]'), ele;
+
+      for (let i = 0; i < elements.length; i++) {
+
+          ele = elements[i];
+
+          if (isElementOnTop(ele)) {
+              e.stopImmediatePropagation();
+              ele.close();
+              break;
+          }
       }
   });
 
@@ -2698,8 +2756,15 @@
       return new Function(...names, `return \`${str}\`;`)(...vals);
   };
 
-  let uuid = function() {
-      return crypto.randomUUID();
+  let uuid$1 = function() {
+
+      if (typeof(crypto.randomUUID) === 'function') {
+          return crypto.randomUUID();
+      }
+
+      return ([1e7]+-1e3+-4e3+-8e3+-1e11).replace(/[018]/g, c =>
+          (c ^ crypto.getRandomValues(new Uint8Array(1))[0] & 15 >> c / 4).toString(16)
+      );
   };
 
   let truncate = function(text, length, clamp = '...') {
@@ -2754,10 +2819,12 @@
       interpolate,
       on,
       toKebabCase,
-      uuid,
+      uuid: uuid$1,
       truncate,
       stripTags
   };
+
+  let uuid = 0;
 
   var ui$1 = {
 
@@ -2790,7 +2857,7 @@
 
       offcanvas: function (content, options) {
 
-          let id = crypto.randomUUID(),
+          let id = `offcanvas-${uuid++}`,
               size = '';
 
           options = options || {};
@@ -2852,7 +2919,7 @@
 
       dialog: function (content, options, dialogtype) {
 
-          let id = crypto.randomUUID();
+          let id = `dialog-${uuid++}`;
 
           document.body.insertAdjacentHTML('beforeend', `
             <kiss-dialog id="dialog-${id}" size="${(options && options.size) || ''}" type="${dialogtype}" esc="${(options && options.escape) ? 'true':'false'}">
@@ -2935,11 +3002,20 @@
       },
 
       prompt: function (text, value = '', clb, options) {
+
+          options = Object.assign({
+              type: 'text',
+              info: null,
+          }, options || {});
+
+          const info = options.info ? `<div class="kiss-margin kiss-color-muted kiss-dialog-prompt-info">${options.info}</div>` : '';
+
           let dialog = this.dialog(/*html*/`
             <form>
                 <div class="kiss-margin kiss-dialog-prompt-message">${text}</div>
+                ${info}
                 <div class="kiss-margin-bottom">
-                    <input class="kiss-width-1-1 kiss-input" type="text" required>
+                    <input class="kiss-width-1-1 kiss-input" type="${options.type}" required>
                 </div>
                 <div class="kiss-margin-top kiss-flex kiss-flex-middle kiss-button-group">
                     <button type="button" class="kiss-button-cancel kiss-button kiss-flex-1">${App.i18n.get('Cancel')}</button>
@@ -2969,7 +3045,7 @@
 
       popout: function (content, options) {
 
-          let id = crypto.randomUUID(),
+          let id = `popout-${uuid++}`,
           size = '';
 
           options = options || {};
@@ -3779,10 +3855,10 @@
   VueView.component('vue-table', Vue.defineAsyncComponent(() => {
       return new Promise(resolve => {
           App.assets.require([
-              'app:assets/vendor/tabulator/tabulator.js',
-              'app:assets/css/vendor/tabulator.css'
+              'app:assets/vendor/ag-grid/ag-grid.js',
+              'app:assets/css/vendor/ag-grid-theme.css'
           ]).then(() => {
-              App.utils.import('app:assets/vendor/tabulator/tabulator-vue.js').then((m) => resolve(m));
+              App.utils.import('app:assets/vendor/ag-grid/ag-grid-vue3.js').then((m) => resolve(m));
           });
       })
   }));
@@ -3815,12 +3891,13 @@
 
       base_url: baseUrl,
       route_url: routeUrl,
+      csrf: (html.getAttribute("data-csrf") || undefined),
       version: (html.getAttribute("data-version") || '0.0.1'),
 
       _events: {},
       _paths: {},
 
-      base: function (url) {
+      base(url) {
 
           let path = url.match(/^(.*?)\:/);
 
@@ -3831,18 +3908,20 @@
           return this.base_url + url;
       },
 
-      route: function (url) {
+      route(url) {
           return this.route_url + url;
       },
 
-      reroute: function (url) {
+      reroute(url) {
           location.href = /^http/.test(url) ? url : this.route(url);
       },
 
-      request: function (url, data, type) {
+      request(url, data, type) {
 
           url = this.route(url);
           type = type || 'json';
+
+          let csrf = this.csrf;
 
           return new Promise(function (fulfill, reject) {
 
@@ -3853,6 +3932,8 @@
 
               url += (url.indexOf('?') !== -1 ? '&' : '?') + 'nc=' + Math.random().toString(36).substr(2);
 
+              data = data || {};
+
               if (data) {
 
                   if (typeof (data) === 'object' && data instanceof HTMLFormElement) {
@@ -3862,6 +3943,10 @@
                       xhr.setRequestHeader('Content-Type', 'application/json; charset=UTF-8');
                       data = JSON.stringify(data || {});
                   }
+              }
+
+              if (csrf) {
+                  xhr.setRequestHeader('X-CSRF-TOKEN', csrf);
               }
 
               xhr.onloadend = function () {
@@ -3876,7 +3961,7 @@
                       }
                   }
 
-                  if (this.status == 200) {
+                  if (this.status === 200) {
                       fulfill(resdata, xhr);
                   } else {
                       reject(resdata, xhr);
@@ -3888,12 +3973,12 @@
           });
       },
 
-      on: function (name, fn) {
+      on(name, fn) {
           if (!this._events[name]) this._events[name] = [];
           this._events[name].push(fn);
       },
 
-      off: function (name, fn) {
+      off(name, fn) {
           if (!this._events[name]) return;
 
           if (!fn) {
@@ -3909,7 +3994,7 @@
           }
       },
 
-      trigger: function (name, params) {
+      trigger(name, params) {
 
           if (!this._events[name]) return;
 
@@ -3920,7 +4005,7 @@
           }
       },
 
-      deferred: function () {
+      deferred() {
 
           let resolve, fail;
 
@@ -3952,7 +4037,7 @@
 
   // custom utils
   App$1.utils.import = function(uri) {
-      return import(App$1.base(uri)+'?v='+App$1.version);
+      return import(`${App$1.base(uri)}?v=${App$1.version}`);
   };
 
   App$1.utils.$interpolate = function (str, data) {
