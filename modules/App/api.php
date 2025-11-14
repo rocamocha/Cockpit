@@ -35,9 +35,11 @@ $this->bind('/api/*', function($params) {
         $token = 'public';
     }
 
+    // Assign a default role for anonymous/public access so ACL read checks can succeed
+    // (previously was null which may cause 403 responses after update if models deny null role)
     $apiUser = [
         'user' => 'anonymous',
-        'role' => null
+        'role' => 'public'
     ];
 
     if ($token != 'public' && preg_match('/^USR-/', $token)) {
