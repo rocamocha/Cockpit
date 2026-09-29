@@ -1,4 +1,4 @@
-import { on } from '../../js/events.js';
+import { on, trigger } from '../../js/events.js';
 
 let Animations = {
     default(resolve, current, next) {
@@ -80,6 +80,35 @@ customElements.define('kiss-carousel', class extends HTMLElement {
 
         this.wrapper = this.querySelector(':scope > kiss-slides') || this;
         this.animation = this.getAttribute('animation') || 'slide';
+        this.swipe = this.getAttribute('swipe') === 'false' ? false : true;
+
+        // ARIA: carousel semantics
+        this.setAttribute('aria-roledescription', 'carousel');
+        if (!this.hasAttribute('aria-label')) {
+            this.setAttribute('aria-label', 'Carousel');
+        }
+
+        // Make focusable for keyboard navigation
+        if (!this.hasAttribute('tabindex')) {
+            this.setAttribute('tabindex', '0');
+        }
+
+        // ARIA: label each slide
+        let allSlides = this.slides();
+        let total = allSlides.length;
+        allSlides.forEach((slide, idx) => {
+            slide.setAttribute('role', 'group');
+            slide.setAttribute('aria-roledescription', 'slide');
+            slide.setAttribute('aria-label', `Slide ${idx + 1} of ${total}`);
+        });
+
+        // Live region for screen reader announcements
+        this._liveRegion = document.createElement('div');
+        this._liveRegion.setAttribute('aria-live', 'polite');
+        this._liveRegion.setAttribute('aria-atomic', 'true');
+        this._liveRegion.classList.add('kiss-hidden-visually');
+        this.appendChild(this._liveRegion);
+
         this.setActive(0)
 
         // events
@@ -103,11 +132,37 @@ customElements.define('kiss-carousel', class extends HTMLElement {
             }
         });
 
+        // Keyboard navigation
+        on(this, 'keydown', e => {
+
+            let handled = false;
+
+            switch (e.key) {
+                case 'ArrowLeft':
+                    this.prevSlide();
+                    handled = true;
+                    break;
+                case 'ArrowRight':
+                    this.nextSlide();
+                    handled = true;
+                    break;
+            }
+
+            if (handled) {
+                e.preventDefault();
+            }
+        });
+
         let pointerStart = null;
+
+        const exclude = 'a, input, textarea, select, button, video, audio';
 
         on(this.wrapper, 'pointerdown', e => {
 
-            if (e.target.matches('a, input, textarea, select, button')) {
+            if (!this.swipe ||
+                e.target.matches(exclude) ||
+                e.target.closest(exclude)
+            ) {
                 return;
             }
 
@@ -142,9 +197,15 @@ customElements.define('kiss-carousel', class extends HTMLElement {
             this.normalize();
         });
 
+        let resizeTicking = false;
         window.addEventListener('resize', () => {
-            this.normalize();
-        });
+            if (resizeTicking) return;
+            resizeTicking = true;
+            requestAnimationFrame(() => {
+                this.normalize();
+                resizeTicking = false;
+            });
+        }, { passive: true });
     }
 
     normalize() {
@@ -190,7 +251,8 @@ customElements.define('kiss-carousel', class extends HTMLElement {
 
         if (this.isAnimating) return;
 
-        const slide = this.slides()[idx] || null;
+        const slides = this.slides();
+        const slide = slides[idx] || null;
 
         if (!slide) {
             return;
@@ -200,10 +262,22 @@ customElements.define('kiss-carousel', class extends HTMLElement {
         if (!this.activeSlide && !idx) {
             slide.classList.add('active');
             this.activeSlide = slide;
+
+            if (this._liveRegion) {
+                this._liveRegion.textContent = `Slide ${idx + 1} of ${slides.length}`;
+            }
+
+            trigger(this, 'carouselenter', {
+                detail: {slide: this.activeSlide}
+            });
             return;
         }
 
         this.isAnimating = true;
+
+        trigger(this, 'carouselleave', {
+            detail: {slide: this.activeSlide}
+        });
 
         animate(this.animation, this.activeSlide, slide).then(() => {
 
@@ -222,6 +296,15 @@ customElements.define('kiss-carousel', class extends HTMLElement {
 
             this.activeSlide = slide;
             this.isAnimating = false;
+
+            // Announce slide change to screen readers
+            if (this._liveRegion) {
+                this._liveRegion.textContent = `Slide ${idx + 1} of ${slides.length}`;
+            }
+
+            trigger(this, 'carouselenter', {
+                detail: {slide: this.activeSlide}
+            });
         });
     }
 });

@@ -5,7 +5,7 @@ namespace Assets\Controller;
 use App\Controller\App;
 use ArrayObject;
 
-use MongoHybrid\NaturalLanguageToMongoQuery;
+use MongoHybrid\SQLToMongoQuery;
 
 class Assets extends App {
 
@@ -21,7 +21,7 @@ class Assets extends App {
         $this->helper('session')->close();
         $this->hasValidCsrfToken(true);
 
-        $options = array_merge([
+        $options = \array_merge([
             'sort' => ['_created' => -1]
         ], $this->param('options', []));
 
@@ -30,8 +30,7 @@ class Assets extends App {
         if ($skip   = $this->param('skip'  , null)) $options['skip']   = $skip;
         if ($folder = $this->param('folder', null)) $options['folder'] = $folder;
 
-
-        if (isset($options['filter']) && (is_string($options['filter']) || \is_countable($options['filter']))) {
+        if (isset($options['filter']) && (\is_string($options['filter']) || \is_countable($options['filter']))) {
 
             $filter = [];
 
@@ -39,25 +38,29 @@ class Assets extends App {
 
             foreach ($options['filter'] as $f) {
 
-                if (!is_string($f)) {
+                if (!\is_string($f)) {
                     $filter[] = $f;
                     continue;
                 }
 
                 if ($f && $f[0] === ':') {
-                    $filter[] = NaturalLanguageToMongoQuery::translate(substr($f, 1));
+                    try {
+                        $filter[] = SQLToMongoQuery::translate(\substr($f, 1));
+                    } catch (\Exception $e) {
+                        throw new \Exception("Invalid filter!");
+                    }
                     continue;
                 }
 
                 if (\preg_match('/^\{(.*)\}$/', $f)) {
 
                     try {
-                        $f = json5_decode($f, true);
+                        $f = \json5_decode($f, true);
                     } catch (\Exception $e) {}
 
                 } else {
 
-                    $terms = str_getcsv(trim($f), ' ');
+                    $terms = \str_getcsv(\trim($f), ' ', escape: '\\');
 
                     $f = ['$or' => []];
 
@@ -75,7 +78,7 @@ class Assets extends App {
                 $filter[] = $f;
             }
 
-            $options['filter'] = count($filter) ? ['$and' => $filter] : null;
+            $options['filter'] = \count($filter) ? ['$and' => $filter] : null;
 
         }
 
@@ -87,14 +90,14 @@ class Assets extends App {
         $assets = $this->module('assets')->assets($options);
 
         $count = (!isset($options['skip']) && !isset($options['limit']))
-                    ? count($assets)
+                    ? \count($assets)
                     : $this->app->dataStorage->count('assets', ($options['filter'] ?? null));
 
-        $pages = isset($options['limit']) ? ceil($count / $options['limit']) : 1;
+        $pages = isset($options['limit']) ? \ceil($count / $options['limit']) : 1;
         $page  = 1;
 
         if ($pages > 1 && isset($options['skip'])) {
-            $page = ceil($options['skip'] / $options['limit']) + 1;
+            $page = \ceil($options['skip'] / $options['limit']) + 1;
         }
 
         // virtual folders
@@ -103,9 +106,20 @@ class Assets extends App {
             'sort' => ['name' => 1]
         ];
 
+        if (isset($terms)) {
+
+            $f = [];
+
+            foreach ($terms as $term) {
+                $f[] = [ 'name' => ['$regex' => $term, '$options' => 'i']];
+            }
+
+            $options['filter']['$or'] = $f;
+        }
+
         $folders = $this->module('assets')->folders($options);
 
-        return compact('assets', 'count', 'pages', 'page', 'folders');
+        return \compact('assets', 'count', 'pages', 'page', 'folders');
     }
 
     public function asset($id = null) {
@@ -130,11 +144,17 @@ class Assets extends App {
             return $this->stop(['error' => 'Editing not allowed'], 401);
         }
 
-        if ($asset = $this->param('asset', false)) {
-            return $this->module('assets')->update($asset)[0];
+        $asset = $this->param('asset');
+
+        if (!$asset || !isset($asset['_id'])) {
+            return false;
         }
 
-        return false;
+        if (!\is_string($asset['_id']) || !$this->app->dataStorage->isValidId($asset['_id'])) {
+            return $this->stop(['error' => 'Asset ID looks wrong'], 400);
+        }
+
+        return $this->module('assets')->update($asset)[0];
     }
 
     public function upload() {
@@ -148,6 +168,22 @@ class Assets extends App {
 
         $meta = ['folder' => $this->param('folder', '')];
 
+        if (isset($this->app->request->files['file'])) {
+
+            $file = $this->app->request->files['file'];
+
+            $param = [
+                'name' => [$file['name']],
+                'full_path' => [$file['full_path']],
+                'type' => [$file['type']],
+                'tmp_name' => [$file['tmp_name']],
+                'error' => [$file['error']],
+                'size' => [$file['size']],
+            ];
+
+            return $this->module('assets')->upload($param, $meta);
+        }
+
         return $this->module('assets')->upload('files', $meta);
     }
 
@@ -156,7 +192,7 @@ class Assets extends App {
         $this->helper('session')->close();
         $this->hasValidCsrfToken(true);
 
-        if (!$this->isAllowed('assets/upload')) {
+        if (!$this->isAllowed('assets/upload') || !$this->isAllowed('assets/edit')) {
             return $this->stop(['error' => 'Upload not allowed'], 401);
         }
 
@@ -170,21 +206,23 @@ class Assets extends App {
             return false;
         }
 
-        $result = $this->module('assets')->upload('files', [
+        $meta = [
             '_id' => $asset['_id'],
             'title' => $asset['title'],
             'description' => $asset['description'],
             'tags' => $asset['tags'],
             '_created' => $asset['_created'],
-        ]);
+        ];
+
+        $result = $this->module('assets')->upload('files', $meta);
 
         if (!isset($result['assets'][0])) {
             return false;
         }
 
         // remove old asset file
-        if ($this->app->fileStorage->fileExists('uploads://'.trim($asset['path'], '/'))) {
-            $this->app->fileStorage->delete('uploads://'.trim($asset['path'], '/'));
+        if ($this->app->fileStorage->fileExists('uploads://'.\trim($asset['path'], '/'))) {
+            $this->app->fileStorage->delete('uploads://'.\trim($asset['path'], '/'));
         }
 
         $asset = $result['assets'][0];
@@ -222,13 +260,18 @@ class Assets extends App {
 
         $this->hasValidCsrfToken(true);
 
-        $name   = $this->param('name', null);
         $parent = $this->param('parent', '');
+        $folder = $this->param('folder', null);
 
-        if (!$name) return;
+        if (!isset($folder['name']) || !$folder['name']) {
+            return $this->stop(['error' => 'Folder name is required'], 400);
+        }
 
-        $folder = $this->param('folder', [
+        $folder = \array_merge([
+            'name' => '',
             '_p' => $parent,
+            'icon' => '',
+        ], $folder, [
             '_by' => $this->helper('auth')->getUser('_id'),
         ]);
 
@@ -236,10 +279,8 @@ class Assets extends App {
             return $this->stop(['error' => 'Editing folder not allowed'], 401);
         }
 
-        $folder['name'] = $name;
-
         // does folder already exists?
-        if ($this->app->dataStorage->count('assets/folders', ['name' => $name, '_p' => $folder['_p']])) {
+        if (!isset($folder['_id']) && $this->app->dataStorage->count('assets/folders', ['name' => $folder['name'], '_p' => $folder['_p']])) {
             return $this->stop(['error' => 'Folder already exists'], 409);
         }
 
@@ -284,7 +325,7 @@ class Assets extends App {
 
             $mime = null;
 
-            if (strpos($this->app->request->headers['Accept'] ?? '', 'image/webp') !== false) {
+            if (\str_contains($this->app->request->headers['Accept'] ?? '', 'image/webp')) {
                 $gdinfo = \gd_info();
                 $mime = isset($gdinfo['WebP Support']) && $gdinfo['WebP Support'] ? 'webp' : null;
             }
@@ -298,12 +339,20 @@ class Assets extends App {
             'mode' => $this->param('m', 'thumbnail'),
             'mime' => $mime,
             'filters' => (array) $this->param('f', []),
-            'width' => intval($this->param('w', null)),
-            'height' => intval($this->param('h', null)),
-            'quality' => intval($this->param('q', 30)),
-            'rebuild' => intval($this->param('r', false)),
+            'width' => $this->param('w', null),
+            'height' => $this->param('h', null),
+            'quality' => \intval($this->param('q', 30)),
+            'rebuild' => \intval($this->param('r', false)),
             'timestamp' => $this->param('t', null),
         ];
+
+        if ($options['width'] !== 'original') {
+            $options['width'] = \intval($options['width']);
+        }
+
+        if ($options['height'] !== 'original') {
+            $options['height'] = \intval($options['height']);
+        }
 
         $thumbUrl = $this->helper('asset')->image($options);
 
@@ -311,7 +360,11 @@ class Assets extends App {
             return false;
         }
 
-        $this->app->reroute($thumbUrl);
+        if($this->param('re:int', 1)) {
+            $this->app->reroute($thumbUrl);
+        }
+
+        return ['url' => $thumbUrl];
     }
 
 }

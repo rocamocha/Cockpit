@@ -10,17 +10,42 @@ use OpenApi\Analysis;
 use OpenApi\Annotations as OA;
 use OpenApi\Generator;
 
-class CleanUnusedComponents implements ProcessorInterface
+/**
+ * Tracks the use of all <code>Components</code> and removed unused schemas.
+ */
+class CleanUnusedComponents
 {
-    use Concerns\CollectorTrait;
+    use Concerns\AnnotationTrait;
 
-    public function __invoke(Analysis $analysis)
+    protected bool $enabled;
+
+    public function __construct(bool $enabled = false)
     {
-        if (Generator::isDefault($analysis->openapi->components)) {
+        $this->enabled = $enabled;
+    }
+
+    public function isEnabled(): bool
+    {
+        return $this->enabled;
+    }
+
+    /**
+     * Enables/disables the <code>CleanUnusedComponents</code> processor.
+     */
+    public function setEnabled(bool $enabled): CleanUnusedComponents
+    {
+        $this->enabled = $enabled;
+
+        return $this;
+    }
+
+    public function __invoke(Analysis $analysis): void
+    {
+        if (!$this->enabled || Generator::isDefault($analysis->openapi->components)) {
             return;
         }
 
-        $analysis->annotations = $this->collect($analysis->annotations);
+        $analysis->annotations = $this->collectAnnotations($analysis->annotations);
 
         // allow multiple runs to catch nested dependencies
         for ($ii = 0; $ii < 10; ++$ii) {
@@ -83,14 +108,16 @@ class CleanUnusedComponents implements ProcessorInterface
             foreach ($analysis->openapi->components->{$componentType} as $ii => $component) {
                 if ($component->{$nameProperty} == $name) {
                     $annotation = $analysis->openapi->components->{$componentType}[$ii];
-                    foreach ($this->collect([$annotation]) as $unused) {
-                        $analysis->annotations->detach($unused);
-                    }
+                    $this->removeAnnotation($analysis->annotations, $annotation);
                     unset($analysis->openapi->components->{$componentType}[$ii]);
+
+                    if (!$analysis->openapi->components->{$componentType}) {
+                        $analysis->openapi->components->{$componentType} = Generator::UNDEFINED;
+                    }
                 }
             }
         }
 
-        return 0 != count($unusedRefs);
+        return [] !== $unusedRefs;
     }
 }

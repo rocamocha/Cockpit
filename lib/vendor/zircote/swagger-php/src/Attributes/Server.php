@@ -6,10 +6,11 @@
 
 namespace OpenApi\Attributes;
 
+use OpenApi\Annotations as OA;
 use OpenApi\Generator;
 
 #[\Attribute(\Attribute::TARGET_CLASS | \Attribute::IS_REPEATABLE)]
-class Server extends \OpenApi\Annotations\Server
+class Server extends OA\Server
 {
     /**
      * @param ServerVariable[]         $variables
@@ -18,7 +19,7 @@ class Server extends \OpenApi\Annotations\Server
      */
     public function __construct(
         ?string $url = null,
-        ?string $description = null,
+        ?string $description = Generator::UNDEFINED,
         ?array $variables = null,
         // annotation
         ?array $x = null,
@@ -26,9 +27,10 @@ class Server extends \OpenApi\Annotations\Server
     ) {
         parent::__construct([
                 'url' => $url ?? Generator::UNDEFINED,
-                'description' => $description ?? Generator::UNDEFINED,
+                'description' => $description,
                 'x' => $x ?? Generator::UNDEFINED,
-                'value' => $this->combine($variables, $attachables),
+                'attachables' => $attachables ?? Generator::UNDEFINED,
+                'value' => $this->combine($variables),
             ]);
     }
 }

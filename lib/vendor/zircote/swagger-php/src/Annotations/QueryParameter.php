@@ -6,8 +6,10 @@
 
 namespace OpenApi\Annotations;
 
+use OpenApi\Annotations as OA;
+
 /**
- * A `@OA\Request` query parameter.
+ * A <code>@OA\Request</code> query parameter.
  *
  * @Annotation
  */

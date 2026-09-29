@@ -8,6 +8,9 @@ $this->helpers['log']       = 'System\\Helper\\Log';
 $this->helpers['revisions'] = 'System\\Helper\\Revisions';
 $this->helpers['system']    = 'System\\Helper\\System';
 $this->helpers['spaces']    = 'System\\Helper\\Spaces';
+$this->helpers['worker']    = 'System\\Helper\\Worker';
+
+// events
 
 $this->on('app.admin.init', function() {
     include(__DIR__.'/admin.php');
@@ -23,10 +26,16 @@ $this->on('app.cli.init', function($cli) {
     include(__DIR__.'/cli.php');
 });
 
-$this->on('error', function($error, $exception) {
+$this->on('error', function($error, $exception = null) {
 
     try {
+
+        if ($exception && $exception instanceof \App\Exception\AppNotification) {
+            return;
+        }
+
         $this->module('system')->log("System error: {$error['message']}", type: 'error', context: $error);
+
     } catch(Throwable $e) {}
 });
 
@@ -49,7 +58,22 @@ $this->module('system')->extend([
         return $url;
     },
 
-    'log' => function(string $message, string $channel = 'system', string $type = 'info', ?array $context = null) {
+    'log' => function(string $message, string $channel = 'system', string $type = 'info', mixed $context = null) {
+
+        // Convert context to array if possible, otherwise set to null
+        if ($context !== null && !is_array($context)) {
+            if (is_object($context) && method_exists($context, 'toArray')) {
+                $context = $context->toArray();
+            } elseif (is_object($context) || is_array($context)) {
+                $context = (array) $context;
+            } else {
+                $context = null;
+            }
+        }
+
+        if (!in_array($type, ['alert', 'debug', 'error', 'info', 'notice', 'warning'])) {
+            $type = 'info';
+        }
 
         $logger = $this->app->helper('log')->channel($channel);
 
@@ -64,7 +88,7 @@ $this->module('system')->extend([
             return false;
         }
 
-        $data = $this->app->dataStorage->findOne('system/users', ['_id' => $user['_id']], ['_id' => 1, 'password' => 1]);
+        $data = $this->app->dataStorage->findOne('system/users', ['_id' => $user['_id'], 'active' => true], ['_id' => 1, 'password' => 1]);
 
         if (!$data || !password_verify($password, $data['password'])) {
             return false;

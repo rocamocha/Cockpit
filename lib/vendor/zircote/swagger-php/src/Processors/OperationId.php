@@ -13,9 +13,9 @@ use OpenApi\Generator;
 /**
  * Generate the OperationId based on the context of the OpenApi annotation.
  */
-class OperationId implements ProcessorInterface
+class OperationId
 {
-    protected $hash;
+    protected bool $hash;
 
     public function __construct(bool $hash = true)
     {
@@ -29,8 +29,6 @@ class OperationId implements ProcessorInterface
 
     /**
      *  If set to <code>true</code> generate ids (md5) instead of clear text operation ids.
-     *
-     * @param bool $hash
      */
     public function setHash(bool $hash): OperationId
     {
@@ -39,7 +37,7 @@ class OperationId implements ProcessorInterface
         return $this;
     }
 
-    public function __invoke(Analysis $analysis)
+    public function __invoke(Analysis $analysis): void
     {
         $allOperations = $analysis->getAnnotationsOfType(OA\Operation::class);
 
@@ -54,20 +52,20 @@ class OperationId implements ProcessorInterface
             }
 
             $context = $operation->_context;
-            if ($context && $context->method) {
+            if ($context) {
                 $source = $context->class ?? $context->interface ?? $context->trait;
                 $operationId = null;
                 if ($source) {
-                    if ($context->namespace) {
-                        $operationId = $context->namespace . '\\' . $source . '::' . $context->method;
-                    } else {
-                        $operationId = $source . '::' . $context->method;
-                    }
-                } else {
+                    $method = $context->method ? ('::' . $context->method) : '';
+                    $operationId = $context->namespace ? $context->namespace . '\\' . $source . $method : $source . $method;
+                } elseif ($context->method) {
                     $operationId = $context->method;
                 }
-                $operationId = strtoupper($operation->method) . '::' . $operation->path . '::' . $operationId;
-                $operation->operationId = $this->hash ? md5($operationId) : $operationId;
+
+                if ($operationId) {
+                    $operationId = strtoupper($operation->method) . '::' . $operation->path . '::' . $operationId;
+                    $operation->operationId = $this->hash ? md5($operationId) : $operationId;
+                }
             }
         }
     }

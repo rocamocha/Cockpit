@@ -1,7 +1,7 @@
 <?php
 
 /**
- * @OA\Server(url=APP_DIR)
+ * @OA\Server(url="{{ app.api.url }}")
  *
  * @OA\Info(title="{{ app.name }}", version="{{ app.version }}")
  *
@@ -21,7 +21,7 @@ $this->service('gql', function() use($app) {
     return $gql;
 });
 
-// Rest Api service
+// Rest API service
 $this->service('restApi', function() use($app) {
     $restApi = new App\RestApi\Query($app);
     return $restApi;
@@ -49,13 +49,16 @@ $this->bind('/api/*', function($params) {
             return ['error' => 'Authentication failed'];
         }
 
+        $apiUser['_id']  = $user['_id'];
         $apiUser['user'] = $user['user'];
         $apiUser['role'] = $user['role'];
 
     // is jwt token?
     } elseif ($token != 'public' && preg_match('/^[A-Za-z0-9-_]+\.[A-Za-z0-9-_]+\.[A-Za-z0-9-_]*$/', $token)) {
 
-            // todo
+            // JWT token validation is not yet implemented — reject to prevent auth bypass
+            $this->response->status = 401;
+            return ['error' => 'JWT authentication is not supported'];
 
     } else {
 

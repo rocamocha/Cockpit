@@ -20,6 +20,12 @@ class FileStorage {
 
     public function addStorage(string $name, array $config): self {
 
+        if (isset($config['url'])) {
+            $config['url'] = rtrim($config['url'], '/');
+        }
+
+        $config['args'] = $config['args'] ?? [];
+
         $this->config[$name] = $config;
 
         if (isset($config['mount']) && $config['mount']) {
@@ -38,18 +44,28 @@ class FileStorage {
         return $this->storages[$name] ?? null;
     }
 
-    public function getURL(string $file): ?string {
+    public function getURL(string $file, bool $checkExist = true): ?string {
 
         $url = null;
 
-        list($prefix, $path) = explode('://', $file, 2);
+        if (!str_contains($file, '://')) {
+            return null;
+        }
+
+        [$prefix, $path] = explode('://', $file, 2);
+        $path = ltrim($path, '/');
 
         if (isset($this->config[$prefix]['url'])) {
 
             if (!$path) {
                 $url = $this->config[$prefix]['url'];
-            } elseif ($this->manager->fileExists($file)) {
-                $url = rtrim($this->config[$prefix]['url'], '/').'/'.ltrim($path, '/');
+            } elseif (
+                !$checkExist || (
+                    ($storage = $this->use($prefix)) &&
+                    ($storage->fileExists($path) || $storage->directoryExists($path))
+                )
+            ) {
+                $url = $this->config[$prefix]['url'].'/'.ltrim($path, '/');
             }
         }
 
@@ -62,12 +78,14 @@ class FileStorage {
 
         if (!$mountMethod) {
             $mountMethod = new \ReflectionMethod('League\Flysystem\MountManager', 'mountFilesystem');
-            $mountMethod->setAccessible(true);
         }
 
         $config = $this->config[$name];
         $adapter = new \ReflectionClass($config['adapter']);
-        $this->storages[$name] = new Filesystem($adapter->newInstanceArgs($config['args'] ?: []));
+        $this->storages[$name] = new Filesystem(
+            $adapter->newInstanceArgs($config['args'] ?? []),
+            ['visibility' => $config['visibility'] ?? 'public']
+        );
 
         if (isset($config['mount']) && $config['mount']) {
             $mountMethod->invokeArgs($this->manager, [$name, $this->storages[$name]]);

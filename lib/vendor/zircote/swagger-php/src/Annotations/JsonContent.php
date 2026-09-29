@@ -6,26 +6,38 @@
 
 namespace OpenApi\Annotations;
 
+use OpenApi\Annotations as OA;
 use OpenApi\Generator;
 
 /**
  * Shorthand for a json response.
  *
- * Use as `@OA\Schema` inside a `Response` and `MediaType`->`'application/json'` will be generated.
+ * Example:
+ * ```php
+ * @OA\JsonContent(
+ *     ref="#/components/schemas/user"
+ * )
+ * ```
+ * vs.
+ * ```php
+ * @OA\MediaType(
+ *     mediaType="application/json",
+ *     @OA\Schema(
+ *         ref="#/components/schemas/user"
+ *     )
+ * )
+ * ```
  *
  * @Annotation
  */
 class JsonContent extends Schema
 {
     /**
-     * An associative array of Examples attributes.
+     * A map between a property name and its encoding information.
      *
-     * The keys represent the name of the example and the values are instances of the Examples attribute.
-     * Each example is used to show how the content of the request or response should look like.
-     *
-     * @var array<string,Examples>
+     * @var Encoding[]
      */
-    public $examples = Generator::UNDEFINED;
+    public $encoding = Generator::UNDEFINED;
 
     /**
      * @inheritdoc
@@ -41,6 +53,7 @@ class JsonContent extends Schema
         Property::class => ['properties', 'property'],
         ExternalDocumentation::class => 'externalDocs',
         AdditionalProperties::class => 'additionalProperties',
+        Encoding::class => ['encoding', 'property'],
         Examples::class => ['examples', 'example'],
         Attachable::class => ['attachables'],
     ];

@@ -10,7 +10,26 @@ export default {
             { name: 'options', type: 'text', multiple: true },
         ],
         render(value, field) {
-            return Array.isArray(value) ? value.join(', ') : value;
+
+            const options = field?.opts?.options ?? []
+
+            if (Array.isArray(options) && options.length > 0 && (typeof(options[0]) !== 'string')) {
+
+                const selectedValues = typeof(value) === 'string' ? value.split(',') : value || []
+                let selectedOptions = options.filter((o) => selectedValues.indexOf((o.value ?? o).toString().trim()) !== -1);
+
+                if (selectedOptions.length > 0){
+                    return selectedOptions.map(o => (o.label ?? o).toString().trim()).join(', ');
+                }
+            }
+
+            value = Array.isArray(value) ? value.join(', ') : value;
+
+            if (value && typeof(value) === 'string') {
+                value = value = App.utils.stripTags(value);
+            }
+
+            return value;
         }
     },
 
@@ -159,7 +178,7 @@ export default {
 
                         const option = {
                             value: item[mapping.value] ?? item,
-                            label: item[mapping.label] ?? item[mapping.value] ?? item,
+                            label: item[mapping.label] || item[mapping.value] || item,
                             group: item[mapping.group] ?? ''
                         };
 
@@ -202,7 +221,7 @@ export default {
 
                     <div class="kiss-flex kiss-flex-middle kiss-position-relative" :class="{'kiss-color-muted': !selected(option.value)}" v-for="option in lst">
                         <div class="kiss-size-4"><icon>{{ selected(option.value) ? 'radio_button_checked' : 'radio_button_unchecked' }}</icon></div>
-                        <div class="kiss-size-small kiss-margin-small-left">{{ option.label }}</div>
+                        <div class="kiss-size-small kiss-margin-small-start">{{ option.label }}</div>
                         <a class="kiss-cover" @click="select(option.value)"></a>
                     </div>
                 </div>

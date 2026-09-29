@@ -2,6 +2,8 @@
 
 // Register Helpers
 $this->helpers['content'] = 'Content\\Helper\\Content';
+$this->helpers['content.model'] = 'Content\\Helper\\Model';
+$this->helpers['content.linkedfilter'] = 'Content\\Helper\\LinkedContentFilter';
 
 // load admin related code
 $this->on('app.admin.init', function() {
@@ -23,168 +25,53 @@ $this->on('app.api.request', function() {
 $this->module('content')->extend([
 
     // memoize data
-    '_models' => [],
     '_refs' => [],
 
     'createModel' => function(string $name, array $data = []): mixed {
-
-        if (!trim($name)) {
-            return false;
-        }
-
-        $name = preg_replace('/[^A-Za-z0-9]/', '', $name);
-        $storagepath = $this->app->path('#storage:').'/content';
-
-        if (!$this->app->path('#storage:content')) {
-
-            if (!$this->app->helper('fs')->mkdir($storagepath)) {
-                return false;
-            }
-        }
-
-        if ($this->exists($name)) {
-            return false;
-        }
-
-        $data['name'] = $name;
-
-        $time = time();
-
-        $model = array_replace_recursive([
-            'name'      => $name,
-            'label'     => $name,
-            'info'      => '',
-            'type'      => 'collection',
-            'fields'     => [],
-            'preview'   => [],
-            'group'     => null,
-            'meta'      => null,
-            '_created'  => $time,
-            '_modified'  => $time
-        ], $data);
-
-        $export = $this->app->helper('utils')->var_export($model, true);
-
-        if (!$this->app->helper('fs')->write("#storage:content/{$name}.model.php", "<?php\n return {$export};")) {
-            return false;
-        }
-
-        $this->app->trigger('content.model.create', [$model]);
-
-        return $model;
+        return $this->app->helper('content.model')->create($name, $data);
     },
 
     'updateModel' => function(string $name, array $data): mixed {
-
-        if (!$this->exists($name)) {
-            return false;
-        }
-
-        $metapath = $this->app->path("#storage:content/{$name}.model.php");
-
-        if (!$metapath) {
-            return false;
-        }
-
-        $data['_modified'] = time();
-
-        $model  = include($metapath);
-        $model  = array_merge($model, $data);
-        $export = $this->app->helper('utils')->var_export($model, true);
-
-        if (!$this->app->helper('fs')->write($metapath, "<?php\n return {$export};")) {
-            return false;
-        }
-
-        $this->app->trigger('content.update.model', [$model]);
-        $this->app->trigger("content.update.model.{$name}", [$model]);
-
-        if (function_exists('opcache_invalidate')) opcache_invalidate($metapath, true);
-
-        return $model;
+        return $this->app->helper('content.model')->update($name, $data);
     },
 
     'saveModel' => function(string $name, array $data): mixed {
-
-        if (!trim($name)) {
-            return false;
-        }
-
-        return $this->exists($name) ? $this->updateModel($name, $data) : $this->createModel($name, $data);
+        return $this->app->helper('content.model')->save($name, $data);
     },
 
     'removeModel' => function(string $name): bool {
-
-        $model = $this->model($name);
-
-        if (!$model) {
-            return false;
-        }
-
-        $this->app->helper('fs')->delete("#storage:content/{$name}.model.php");
-
-        if ($model['type'] == 'singleton') {
-            $this->app->dataStorage->remove('content/singletons', ['_model' => $name]);
-        } elseif (in_array($model['type'], ['collection', 'tree'])) {
-            $this->app->dataStorage->dropCollection("content/collections/{$name}");
-        }
-
-        $this->app->trigger('content.remove.model', [$name, $model]);
-
-        return true;
+        return $this->app->helper('content.model')->remove($name);
     },
 
     'models' => function(bool $extended = false): array {
-
-        $models = [];
-
-        foreach ($this->app->helper('fs')->ls('*.model.php', '#storage:content') as $path) {
-
-            $store = include($path->getPathName());
-
-            if ($extended) {
-                $store['_entriesCount'] = $this->count($store['name']);
-            }
-
-            $models[$store['name']] = $store;
-        }
-
-        ksort($models);
-
-        return $models;
+        return $this->app->helper('content.model')->models();
     },
 
-    'exists' => function(string $name): ?string {
-        return $this->app->path("#storage:content/{$name}.model.php");
+    'exists' => function(string $name): mixed {
+        return $this->app->helper('content.model')->exists($name);
     },
 
     'model' => function(string $name): mixed {
-
-        if (!isset($this->props['_models'][$name])) {
-
-            $this->props['_models'][$name] = false;
-
-            if ($path = $this->exists($name)) {
-                $this->props['_models'][$name] = include($path);
-            }
-        }
-
-        return $this->props['_models'][$name];
+        return $this->app->helper('content.model')->model($name);
     },
 
-    'getDefaultModelItem' => function(string $model): array {
+    'getDefaultModelItem' => function(string|array $model): array {
 
         $item = [];
-        $model = $this->model($model);
+        $model = \is_string($model) ? $this->model($model) : $model;
 
         if (!$model) {
-            return $item;
+            return [];
         }
 
-        $fields = $model['fields'];
+        $fields = $model['fields'] ?? [];
         $locales = $this->app->helper('locales')->locales();
 
         foreach ($fields as $field) {
+
+            if (!isset($field['name'])) {
+                continue;
+            }
 
             $name = $field['name'];
             $default = $field['opts']['default'] ?? null;
@@ -220,10 +107,10 @@ $this->module('content')->extend([
 
         $time = time();
         $default = $this->getDefaultModelItem($modelName);
-        $keys = array_keys($default);
         $isUpdate = false;
 
         $collection = null;
+        $current = null;
 
         if (isset($item['_state']) && !is_numeric($item['_state'])) {
             unset($item['_state']);
@@ -249,8 +136,32 @@ $this->module('content')->extend([
 
             if (isset($item['_id'])) {
                 $isUpdate = true;
+                $current = $this->app->dataStorage->findOne($collection, ['_id' => $item['_id']]);
+
+                if ($current) {
+                    $item = array_merge($current, $item);
+                }
             } else {
                 $item = array_merge($default, $item);
+            }
+        }
+
+        $item = $this->app->helper('content.model')->applyComputedFields(
+            $model,
+            $item,
+            $isUpdate,
+            \array_merge($context, ['now' => $time])
+        );
+
+        if (
+            in_array($model['type'], ['collection', 'tree']) &&
+            isset($model['meta']['unique']) &&
+            $model['meta']['unique']
+        ) {
+            $uniqueCheckInfo = [];
+
+            if (!$this->app->helper('content')->isContentUnique($model, $item, $model['meta']['unique'], $uniqueCheckInfo)) {
+                throw new \App\Exception\AppNotification("::{$uniqueCheckInfo['field']}:: must be unique");
             }
         }
 
@@ -265,6 +176,10 @@ $this->module('content')->extend([
 
         if (!$collection) {
             return null;
+        }
+
+        if ($this->app->module('assets')) {
+            $item = $this->app->helper('asset')->updateRefs($item);
         }
 
         $this->app->trigger('content.item.save.before', [$modelName, &$item, $isUpdate, $collection]);
@@ -290,13 +205,21 @@ $this->module('content')->extend([
 
         if (isset($fields)) {
 
+            $this->app->helper('content')->resolveLocalesInProjectionOptions($fields);
+
             foreach ($fields as $f => $v) {
 
-                if (strpos($f, '..') !== 0) continue;
+                if (!str_starts_with($f, '..')) continue;
+
                 $postPopulateProjection[substr($f, 2)] = $v;
-                $fields[explode('.', substr($f, 2))[0]] = 1;
+
+                if ($v === 1 || (is_array($v) && \MongoLite\Projection::hasInclusion($v))) {
+                    $fields[explode('.', substr($f, 2))[0]] = 1;
+                }
+
                 unset($fields[$f]);
             }
+
         }
 
         if ($model['type'] == 'singleton') {
@@ -311,10 +234,12 @@ $this->module('content')->extend([
 
         } elseif (in_array($model['type'], ['collection', 'tree'])) {
 
-            $this->app->helper('content')->replaceLocaleInArrayKeys(
-                $filter,
-                !isset($process['locale']) || $process['locale'] == 'default'  ? '' : $process['locale']
-            );
+            $this->app->helper('content')->replaceLocaleInArrayKeys($filter, $process['locale'] ?? '');
+            
+            // Process linked field filters
+            if (!empty($filter)) {
+                $this->app->helper('content.linkedfilter')->process($filter, $model);
+            }
 
             $collection = "content/collections/{$modelName}";
             $item = $this->app->dataStorage->findOne($collection, $filter, $fields);
@@ -354,36 +279,33 @@ $this->module('content')->extend([
 
         if (isset($options['fields'])) {
 
-            $this->app->helper('content')->replaceLocaleInArrayKeys(
-                $options['fields'],
-                !isset($process['locale']) || $process['locale'] == 'default'  ? '' : $process['locale'],
-                true
-            );
+            $this->app->helper('content')->resolveLocalesInProjectionOptions($options['fields']);
 
             foreach ($options['fields'] as $f => $v) {
 
-                if (strpos($f, '..') !== 0) continue;
+                if (!str_starts_with($f, '..')) continue;
+
                 $postPopulateProjection[substr($f, 2)] = $v;
-                $options['fields'][explode('.', substr($f, 2))[0]] = 1;
+
+                if ($v === 1 || (is_array($v) && \MongoLite\Projection::hasInclusion($v))) {
+                    $options['fields'][explode('.', substr($f, 2))[0]] = 1;
+                }
+
                 unset($options['fields'][$f]);
             }
+
         }
 
-        // replace {field}:locale keys with locale defined in $process
         if (isset($options['filter'])) {
+            // replace {field}:locale keys with locale defined in $process
+            $this->app->helper('content')->replaceLocaleInArrayKeys($options['filter'], $process['locale'] ?? '');
+            // resolve linked fields conditions via @fieldname.{prop} => {mongoquery}
+            $this->app->helper('content.linkedfilter')->process($options['filter'], $model);
 
-            $this->app->helper('content')->replaceLocaleInArrayKeys(
-                $options['filter'],
-                !isset($process['locale']) || $process['locale'] == 'default'  ? '' : $process['locale']
-            );
         }
 
         if (isset($options['sort'])) {
-
-            $this->app->helper('content')->replaceLocaleInArrayKeys(
-                $options['sort'],
-                !isset($process['locale']) || $process['locale'] == 'default'  ? '' : $process['locale']
-            );
+            $this->app->helper('content')->replaceLocaleInArrayKeys($options['sort'], $process['locale'] ?? '');
         }
 
         $items = (array) $this->app->dataStorage->find($collection, $options);
@@ -397,7 +319,7 @@ $this->module('content')->extend([
             $items = $this->populate($items, $process['populate'], 0, $process);
 
             if (count($postPopulateProjection)) {
-                $items = \MongoLite\Projection::onDocuments($items, $postPopulateProjection);
+                $items = \MongoLite\Projection::onDocuments($items, array_merge($options['fields'], $postPopulateProjection));
             }
         }
 
@@ -416,12 +338,43 @@ $this->module('content')->extend([
             return [];
         }
 
-        $this->app->helper('content')->replaceLocaleInArrayKeys(
-            $pipeline,
-            !isset($process['locale']) || $process['locale'] == 'default'  ? '' : $process['locale']
-        );
+        $this->app->helper('content')->replaceLocaleInArrayKeys($pipeline, $process['locale'] ?? '');
 
         $collection = "content/collections/{$modelName}";
+
+        // check $lookup stagees + permissions
+        $allowedModels = null;
+
+        if (isset($process['user']['role'])) {
+            $allowedModels = $this->app->helper('content')->allowedModels($process['user']['role'] ?? null);
+        }
+
+        foreach ($pipeline as &$stage) {
+            
+            if (!isset($stage['$lookup'])) continue;
+
+            $model = $stage['$lookup']['from'] ?? null;
+
+            if (!$model) {
+                throw new Exception('Missing "from" in $lookup stage');
+            }
+
+            $fromModel = $this->model($model);
+
+            if (!$fromModel) {
+                throw new Exception('Try to access unknown model "' . $model . '" in $lookup stage');
+            }
+
+            if (!in_array($fromModel['type'], ['collection', 'tree'])) {
+                throw new Exception('Invalid model type for $lookup stage: ' . $model);
+            }
+
+            if ($allowedModels !== null && !in_array($model, $allowedModels)) {
+                throw new Exception('No permission to access model "' . $model . '" in $lookup stage');
+            }
+
+            $stage['$lookup']['from'] = "content/collections/{$model}";
+        }
 
         $items = $this->app->dataStorage->aggregate($collection, $pipeline)->toArray();
 
@@ -452,6 +405,10 @@ $this->module('content')->extend([
 
         $this->app->trigger('content.remove.before', [$modelName, &$filter, $collection]);
 
+        if (!empty($filter)) {
+            $this->app->helper('content.linkedfilter')->process($filter, $model);
+        }
+
         $result = $this->app->dataStorage->remove($collection, $filter);
 
         return $result;
@@ -475,14 +432,28 @@ $this->module('content')->extend([
 
         $collection = "content/collections/{$modelName}";
 
-        return $this->app->dataStorage->count($collection, $filter);
+        if (!empty($filter)) {
+            $this->app->helper('content.linkedfilter')->process($filter, $model);
+        }
 
+        return $this->app->dataStorage->count($collection, $filter);
     },
 
     'tree' => function(string $modelName, $parentId = null, ?array $filter = null, ?array $fields = null, $process = []) {
 
+        $model = $this->model($modelName);
+        
+        if (!$model) {
+            throw new Exception('Try to access unknown model "'.$modelName.'"');
+        }
+
         $filter = is_array($filter) ? $filter : [];
         $filter['_pid'] = $parentId;
+        
+        // Process linked field filters
+        if (!empty($filter)) {
+            $this->app->helper('content.linkedfilter')->process($filter, $model);
+        }
 
         $items = $this->app->dataStorage->find("content/collections/{$modelName}", [
             'filter' => $filter,
@@ -580,7 +551,15 @@ $this->module('content')->extend([
             foreach ($items as $k => &$v) {
                 if (!is_array($v)) continue;
                 if (is_array($items[$k])) $items[$k] = $update($items[$k]);
-                if (isset($v['_id']) && $v['_id'] == $refId) $items[$k] = $value;
+                if (isset($v['_id']) && $v['_id'] == $refId) {
+
+                    $data = ($value && isset($v['_data'])) ? $v['_data'] : null;
+                    $items[$k] = $value;
+
+                    if ($data) {
+                        $items[$k]['_data'] = $data;
+                    }
+                }
             }
             return $items;
         };
@@ -596,7 +575,7 @@ $this->module('content')->extend([
 
         foreach ($models as $name => $meta) {
 
-            if ($meta['type'] !== 'collection') continue;
+            if (!in_array($meta['type'], ['collection', 'tree'])) continue;
 
             $collection = "content/collections/{$name}";
             $items = $this->app->dataStorage->findTerm($collection, $refId)->toArray();

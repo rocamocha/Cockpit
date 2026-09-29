@@ -1,4 +1,4 @@
-<kiss-container class="kiss-margin-large" size="small">
+<kiss-container class="kiss-margin-small" size="small">
     <ul class="kiss-breadcrumbs">
         <li><a href="<?= $this->route('/system') ?>"><?= t('Settings') ?></a></li>
     </ul>
@@ -9,42 +9,67 @@
                 <div class="kiss-size-4 kiss-flex-1"><strong><?= t('Users') ?></strong></div>
             </div>
 
-            <app-loader v-if="loading"></app-loader>
+            <form class="kiss-margin-large-bottom" :class="{'kiss-disabled': loading}" @submit.prevent="filter = txtFilter">
 
-            <div v-if="!loading && users && users.length">
+                <div class="kiss-flex kiss-flex-middle">
 
-                <form class="kiss-flex kiss-flex-middle kiss-margin-large-bottom" @submit.prevent="filter = txtFilter">
+                    <input type="text" class="kiss-input kiss-flex-1 kiss-margin-xsmall-end" :placeholder="t('Filter users...')" v-model="txtFilter">
 
-                    <input type="text" class="kiss-input kiss-flex-1 kiss-margin-xsmall-right" :placeholder="t('Filter users...')" v-model="txtFilter">
-
-                    <div class="kiss-button-group kiss-margin-small-left">
+                    <div class="kiss-button-group kiss-margin-small-start">
                         <button type="button" class="kiss-button" @click="filter = ''" v-if="filter"><?= t('Reset') ?></button>
                         <button class="kiss-button kiss-flex"><?= t('Search') ?></button>
                     </div>
-                </form>
+
+                </div>
+
+                <div class="kiss-margin">
+
+                    <button class="kiss-button kiss-button-small kiss-overlay-input" type="button">
+                        <span class="kiss-margin-small-end">{{ role || t('All') }}</span><icon>expand_more</icon>
+
+                        <select v-model="role">
+                            <option value="">{{ t('All') }}</option>
+                            <hr>
+                            <option :value="role.appid" v-for="role in roles">{{ role.name }}</option>
+                        </select>
+                    </button>
+                </div>
+            </form>
+
+            <app-loader v-if="loading"></app-loader>
+
+            <div class="animated fadeIn kiss-height-30vh kiss-flex kiss-flex-middle kiss-flex-center kiss-align-center kiss-color-muted" v-if="!loading && users && !users.length">
+                <div>
+                    <p class="kiss-size-large"><?=t('No users found')?></p>
+                </div>
+            </div>
+
+            <div v-if="!loading && users && users.length">
 
                 <ul class="app-list-items animated fadeIn">
 
                     <li v-for="(user, idx) in users" :class="{'kiss-inactive': !user.active}">
 
-                        <div class="kiss-margin kiss-flex">
-                            <div class="kiss-margin-right kiss-position-relative">
+                        <kiss-card class="kiss-padding-small kiss-flex" hover="contrast scale-small">
+                            <div class="kiss-margin-end kiss-position-relative">
                                 <app-avatar size="50" :name="user.name"></app-avatar>
-                                <a class="kiss-cover" :href="$route('/system/users/user/'+user._id)"></a>
+                                <a class="kiss-cover" :href="$routeUrl('/system/users/user/'+user._id)"></a>
                             </div>
                             <div class="kiss-flex-1 kiss-position-relative">
                                 <div class="kiss-size-5"><strong>{{user.name}}</strong></div>
-                                <div class="kiss-color-muted kiss-size-small">
-                                    <span class="kiss-color-primary">{{user.user}}</span> &bullet; {{user.email}}
+                                <div class="kiss-color-muted kiss-size-small kiss-flex kiss-flex-middle kiss-margin-xsmall" gap="small">
+                                    <span class="kiss-badge kiss-text-upper" :class="{'kiss-badge-outline': user.role !== 'admin'}">{{ user.role }}</span>
+                                    <span class="kiss-color-primary">{{user.user}}</span>
+                                    {{user.email}}
                                 </div>
-                                <a class="kiss-cover" :href="$route('/system/users/user/'+user._id)"></a>
+                                <a class="kiss-cover" :href="$routeUrl('/system/users/user/'+user._id)"></a>
                             </div>
-                            <div class="kiss-margin-left" v-if="user._id != '<?= $this['user/_id'] ?>'">
+                            <div class="kiss-margin-start" v-if="user._id != '<?= $this['user/_id'] ?>'">
                                 <a class="kiss-color-danger" @click="remove(user)">
                                     <icon class="kiss-size-large">delete</icon>
                                 </a>
                             </div>
-                        </div>
+                        </kiss-card>
 
                     </li>
 
@@ -57,14 +82,14 @@
                     <div class="kiss-flex kiss-flex-middle">
                         <div class="kiss-flex kiss-flex-middle" v-if="!loading && count">
                             <div class="kiss-size-small">{{ `${count} ${count == 1 ? t('User') : t('Users')}` }}</div>
-                            <div class="kiss-margin-small-left kiss-overlay-input">
+                            <div class="kiss-margin-small-start kiss-overlay-input">
                                 <span class="kiss-badge kiss-badge-outline kiss-color-muted">{{ page }} / {{pages}}</span>
                                 <select v-model="page" @change="load(page)" v-if="pages > 1">
                                     <option v-for="p in pages" :value="p">{{ p }}</option>
                                 </select>
                             </div>
-                            <div class="kiss-margin-small-left kiss-size-small">
-                                <a class="kiss-margin-small-right" v-if="(page - 1) >= 1" @click="load(page - 1)"><?= t('Previous') ?></a>
+                            <div class="kiss-margin-small-start kiss-size-small">
+                                <a class="kiss-margin-small-end" v-if="(page - 1) >= 1" @click="load(page - 1)"><?= t('Previous') ?></a>
                                 <a v-if="(page + 1) <= pages" @click="load(page + 1)"><?= t('Next') ?></a>
                             </div>
                         </div>
@@ -87,7 +112,9 @@
                 data() {
                     return {
                         users: null,
+                        roles: <?= json_encode($this->helper('acl')->roles()) ?>,
                         loading: false,
+                        role: '',
                         filter: '',
                         txtFilter: '',
 
@@ -110,6 +137,7 @@
                             if (q.filter) {
                                 this.filter = q.filter;
                                 this.txtFilter = q.filter;
+                                this.role = q.role;
                             }
                         } catch (e) {}
                     }
@@ -120,6 +148,9 @@
                 watch: {
                     filter(val) {
                         this.txtFilter = val;
+                        this.load();
+                    },
+                    role() {
                         this.load();
                     }
                 },
@@ -140,6 +171,10 @@
                             options.filter = this.filter;
                         }
 
+                        if (this.role) {
+                            options.role = this.role;
+                        }
+
                         if (history) {
 
                             window.history.pushState(
@@ -147,6 +182,7 @@
                                 App.route(['/system/users', '?state=', App.utils.base64encode(JSON.stringify({
                                     page: this.page || null,
                                     filter: this.filter || null,
+                                    role: this.role || '',
                                     limit: this.limit
                                 }))].join(''))
                             );

@@ -9,6 +9,7 @@ $this->helpers['csrf']  = 'App\\Helper\\Csrf';
 $this->helpers['i18n']  = 'App\\Helper\\i18n';
 $this->helpers['rspc']  = 'App\\Helper\\ResponseCache';
 $this->helpers['jwt']   = 'App\\Helper\\JWT';
+$this->helpers['script'] = 'App\\Helper\\Script';
 
 include_once(__DIR__.'/functions.php');
 
@@ -20,9 +21,39 @@ $this->on('app.admin.init', function() {
 
 $this->on('app.api.request', function($request) {
 
+    // check allowed origins
+    $allowedOrigins = $this->retrieve('api.security.origins');
+
+    if ($allowedOrigins) {
+
+        $origin = $request->server['HTTP_REFERER'] ?? ($request->server['HTTP_ORIGIN'] ?? '');
+
+        if ($origin) {
+
+            $host = parse_url($origin, \PHP_URL_HOST);
+
+            if ($host && !in_array($host, $allowedOrigins)) {
+
+                $response = new \Lime\Response();
+                $response->status = 412;
+                $response->mime = 'json';
+                $response->body = json_encode(['error' => 'Not allowed']);
+                $response->flush();
+                $response->flush();
+                $this->app->stop();
+            }
+        }
+    }
+
     // simple response cache ?rspc=1
     if ($this->helper('rspc')->handle($request)) {
         return false;
+    }
+
+    // api rate limiter
+    if ($this->retrieve('api.security.ratelimit')) {
+        $this->helpers['apiRateLimiter'] = 'App\\Helper\\ApiRateLimiter';
+        $this->helper('apiRateLimiter')->handle($request);
     }
 
     include(__DIR__.'/api.php');

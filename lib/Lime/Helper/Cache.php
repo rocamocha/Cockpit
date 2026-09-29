@@ -7,18 +7,18 @@ class Cache extends \Lime\Helper {
     public ?string $prefix = null;
     protected ?string $cachePath = null;
 
-    protected function initialize() {
+    protected function initialize(): void {
         $this->cachePath = \rtrim(\sys_get_temp_dir(),"/\\").'/';
         $this->prefix    = $this->app['app.name'];
     }
 
     public function setCachePath(string $path): void {
         if ($path) {
-            $this->cachePath = rtrim($this->app->path($path), "/\\").'/';
+            $this->cachePath = \rtrim($this->app->path($path), "/\\").'/';
         }
     }
 
-    public function getCachePath() {
+    public function getCachePath(): ?string {
         return $this->cachePath;
     }
 
@@ -40,7 +40,12 @@ class Cache extends \Lime\Helper {
 
     public function read(string $key, mixed $default = null, $decrypt = false): mixed {
 
-        $var = @\file_get_contents($this->cachePath.\md5($this->prefix.'-'.$key).".cache");
+        $var = null;
+        $cacheFile = $this->cachePath.\md5($this->prefix.'-'.$key).".cache";
+
+        if (\file_exists($cacheFile)) {
+            $var = @\file_get_contents($cacheFile);
+        }
 
         if (!$var) {
             return \is_callable($default) ? \call_user_func($default):$default;
@@ -71,7 +76,7 @@ class Cache extends \Lime\Helper {
         $file = $this->cachePath.\md5($this->prefix.'-'.$key).".cache";
 
         if (\file_exists($file)) {
-            @unlink($file);
+            @\unlink($file);
         }
     }
 
@@ -80,7 +85,7 @@ class Cache extends \Lime\Helper {
         $iterator = new \RecursiveDirectoryIterator($this->cachePath);
 
         foreach ($iterator as $file) {
-            if ($file->isFile() && \substr($file, -6)==".cache") {
+            if ($file->isFile() && \str_ends_with($file, ".cache")) {
                 @\unlink($this->cachePath.$file->getFilename());
             }
         }

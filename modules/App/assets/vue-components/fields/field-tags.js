@@ -4,10 +4,10 @@ let instanceCount = 0;
 let ready = new Promise(function(resolve) {
 
     App.assets.require([
-        'app:assets/vendor/choices/choices.js',
-        'app:assets/vendor/choices/choices.css',
+        'app:assets/components/app-tags/app-tags.js',
+        'app:assets/components/app-tags/app-tags.css',
     ], function() {
-        resolve(window.Choices);
+        resolve();
     });
 });
 
@@ -30,6 +30,8 @@ export default {
                 value = '';
             }
 
+            value = App.utils.stripTags(value);
+
             return context == 'table-cell' && value.length > 100 ? App.utils.truncate(value, 100) : value;
         }
     },
@@ -39,14 +41,15 @@ export default {
             uid: `field-tags-${++instanceCount}`,
             val: this.modelValue || [],
             options: [],
-            loading: false
+            loading: false,
+            tagsElement: null
         }
     },
 
     props: {
         modelValue: {
             type: Array,
-            default: []
+            default: () => []
         },
         placeholder: {
             type: String,
@@ -55,9 +58,17 @@ export default {
         max: {
             type: Number
         },
+        minChars: {
+            type: Number,
+            default: 0
+        },
+        strictMode: {
+            type: Boolean,
+            default: false
+        },
         list: {
             type: Array,
-            default: []
+            default: () => []
         },
         src: {
             type: Object,
@@ -67,46 +78,66 @@ export default {
 
     mounted() {
 
+        this.tagsElement = this.$refs.tags;
+
         ready.then(() => {
 
-            this.input = this.$el.querySelector('input, select');
-
-            this.choices = new Choices(this.input, {
-                paste: false,
-                duplicateItemsAllowed: false,
-                maxItemCount: this.max || -1,
-                placeholder: this.placeholder ? true : false,
-                placeholderValue: this.placeholder || '',
-                removeItemButton: true,
-                searchResultLimit: 8,
-                choices: this.options,
-
-                loadingText: App.i18n.get('Loading...'),
-                noResultsText: App.i18n.get('No results found'),
-                noChoicesText: App.i18n.get('No choices to choose from'),
-                itemSelectText: App.i18n.get('Press to select'),
-            })
+            // Set other options
+            if (this.max) {
+                this.tagsElement.setAttribute('max-tags', this.max);
+            }
+            if (this.minChars) {
+                this.tagsElement.setAttribute('min-chars', this.minChars);
+            }
+            if (this.placeholder) {
+                this.tagsElement.setAttribute('placeholder', this.placeholder);
+            }
+            if (this.strictMode) {
+                this.tagsElement.setAttribute('strict-mode', '');
+            }
 
             if (this.src || (Array.isArray(this.list) && this.list.length)) {
                 this.resolveOptions();
             }
 
-            this.updateChoices();
-
-            this.input.addEventListener('change', (e) => {
-                this.val = this.choices.getValue(true);
-                this.update();
-            });
+            this.tagsElement.addEventListener('tags-changed', this.update);
+            this.tagsElement.setTags(Array.isArray(this.modelValue) ? this.modelValue : []);
         });
 
     },
 
-    watch: {
-        modelValue() {
+    beforeUnmount() {
+        if (this.tagsElement) {
+            this.tagsElement.removeEventListener('tags-changed', this.update);
+            // Destroy the tags element completely to prevent memory leaks
+            if (typeof this.tagsElement.destroy === 'function') {
+                this.tagsElement.destroy();
+            }
+            this.tagsElement = null;
+        }
+    },
 
-            this.val = this.modelValue;
-            this.updateChoices();
-            this.update();
+    watch: {
+        modelValue: {
+            handler(newValue) {
+                if (this.tagsElement) {
+                    const currentTags = this.tagsElement.getTags();
+                    if (JSON.stringify(currentTags) !== JSON.stringify(newValue)) {
+                        this.tagsElement.setTags(newValue);
+                    }
+                }
+            },
+            deep: true
+        },
+
+        list: {
+            handler() { this.resolveOptions(); },
+            deep: true
+        },
+
+        src: {
+            handler() { this.resolveOptions(); },
+            deep: true
         }
     },
 
@@ -116,61 +147,50 @@ export default {
 
     methods: {
 
-        updateChoices() {
-
-            if (!this.choices || this.loading) return;
-
-            this.choices.removeActiveItems();
-
-            if (this.options.length) {
-
-                if (Array.isArray(this.val)) {
-                    this.val.forEach(val => this.choices.setChoiceByValue(val))
-                }
-
-            } else {
-                this.choices.setValue(this.val || []);
-            }
-
+        updateOptions() {
+            if (this.loading) return;
+            this.tagsElement.setSuggestions(this.options);
         },
 
-        update() {
-            this.$emit('update:modelValue', this.val)
+        update(e) {
+            this.$emit('update:modelValue', [...e.detail.tags]);
         },
 
         resolveOptions() {
 
+            this.options = [];
+
+            if (!this.src && (!Array.isArray(this.list) || !this.list.length)) {
+                return;
+            }
+
             this.loading = true;
 
             (this.src ? this.resolveItemsBySrc() : this.resolveItemsByList()).then(options => {
-
                 this.loading = false;
                 this.options = options;
-                this.choices.setChoices(this.options, 'value', 'label', true);
-                this.updateChoices();
+                this.updateOptions();
             });
         },
 
         resolveItemsByList() {
 
-            return new Promise((resolve) => {
+            if (!Array.isArray(this.list) || !this.list.length) {
+                return Promise.resolve([]);
+            }
 
-                if (Array.isArray(this.list) && this.list.length) {
+            let id, value, label;
 
-                    let id, value, label, options = [];
+            const options = this.list.map((item, idx) => {
 
-                    options = this.list.map((item, idx) => {
+                id = item.id ?? idx;
+                value = item.value ?? item;
+                label = item.label ?? value;
 
-                        id = item.id ?? idx;
-                        value = item.value ?? item;
-                        label = item.label ?? value;
-
-                        return { id, value, label }
-                    });
-
-                    resolve(options)
-                }
+                return { id, value, label }
             });
+
+            return Promise.resolve(options);
         },
 
         resolveItemsBySrc() {
@@ -187,7 +207,7 @@ export default {
                 this.$request(this.src.route, this.src.params || {}).then(list => {
 
                     if (!Array.isArray(list)) {
-                        resolve(groups);
+                        resolve(options);
                         return;
                     }
 
@@ -195,7 +215,7 @@ export default {
 
                         options.push({
                             value: item[mapping.value] ?? item,
-                            label: item[mapping.label] ?? item[mapping.value] ?? item,
+                            label: item[mapping.label] || item[mapping.value] || item,
                             id: item[mapping.id] ?? item[mapping.value] ?? idx
                         });
                     });
@@ -211,9 +231,7 @@ export default {
 
     template: /*html*/`
         <div field="tags">
-            <select multiple hidden v-if="src"></select>
-            <select multiple hidden v-else-if="Array.isArray(list) && list.length"></select>
-            <input type="text" hidden v-else />
+            <app-tags ref="tags" />
         </div>
     `
 }

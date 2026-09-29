@@ -1,6 +1,7 @@
 <?php
 
 namespace System\Helper;
+
 class Locales extends \Lime\Helper {
 
     protected array $locales = [];
@@ -12,6 +13,12 @@ class Locales extends \Lime\Helper {
         });
     }
 
+    /**
+     * Get the list of available locales.
+     *
+     * @param bool $assoc Whether to return an associative array.
+     * @return array The list of locales.
+     */
     public function locales(bool $assoc = false): array {
 
         if ($assoc) {
@@ -31,26 +38,36 @@ class Locales extends \Lime\Helper {
         return $locales;
     }
 
-    public function applyLocales($obj, $locale = 'default') {
+    /**
+     * Apply locale-specific fields to an object.
+     *
+     * @param mixed $obj The object to apply locales to.
+     * @param string $locale The default locale to use.
+     * @param array|null $locales The list of locales to apply.
+     * @return mixed The object with applied locales.
+     */
+    public function applyLocales($obj, $locale = 'default', ?array $locales = null) {
 
-        static $locales;
-
-        if (!is_array($obj)) {
+        if (!\is_array($obj)) {
             return $obj;
         }
 
-        if (null === $locales) {
-            $locales = array_keys($this->locales(true));
+        if (!isset($locales)) {
+            $locales = \array_keys($this->locales);
+        }
+
+        if (!\count($locales)) {
+            return $obj;
         }
 
         $apply = function($obj) use($locales, $locale) {
 
-            if (!is_array($obj)) return $obj;
+            if (!\is_array($obj)) return $obj;
 
-            $keys = array_filter(array_keys($obj), function($key) use($locales) {
+            $keys = \array_filter(\array_keys($obj), function($key) use($locales) {
 
                 foreach ($locales as $l) {
-                    if (preg_match("/_{$l}$/", $key)) return false;
+                    if (\preg_match("/_{$l}$/", $key)) return false;
                 }
 
                 return true;
@@ -76,8 +93,8 @@ class Locales extends \Lime\Helper {
                     unset($obj["{$key}_{$l}"]);
                 }
 
-                if (isset($obj[$key]) && is_array($obj[$key])) {
-                    $obj[$key] = $this->applyLocales($obj[$key], $locale);
+                if (isset($obj[$key]) && \is_array($obj[$key])) {
+                    $obj[$key] = $this->applyLocales($obj[$key], $locale, $locales);
                 }
             }
 
@@ -85,7 +102,7 @@ class Locales extends \Lime\Helper {
         };
 
         if (isset($obj[0])) {
-            $obj = array_map($apply, $obj);
+            $obj = \array_map($apply, $obj);
         } else {
             $obj = $apply($obj);
         }
@@ -93,6 +110,12 @@ class Locales extends \Lime\Helper {
         return $obj;
     }
 
+    /**
+     * Get the cached locales.
+     *
+     * @param bool $persistent Whether to use the persistent cache.
+     * @return array The cached locales.
+     */
     public function cache(bool $persistent = true): array {
 
         $cache = [
@@ -124,6 +147,8 @@ class Locales extends \Lime\Helper {
         if ($locales && $persistent) {
             $this->app->memory->set('app.locales', $cache);
         }
+
+        $this->locales = $cache;
 
         return $cache;
     }

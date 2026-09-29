@@ -31,7 +31,7 @@ class FieldTypes {
             $def = self::getType($field);
             $name = $field['name'];
 
-            if (is_numeric($name)) {
+            if (\is_numeric($name)) {
                 $name = "_{$name}_";
             }
 
@@ -41,7 +41,7 @@ class FieldTypes {
                     $def['type'] = Type::nonNull($def['type']);
                 }
 
-                if ($field['multiple']) {
+                if (isset($field['multiple']) && $field['multiple']) {
                     $fields[$name] = Type::listOf($def['type']);
                 } else {
                     $fields[$name] = $def;
@@ -64,21 +64,30 @@ class FieldTypes {
             case 'datetime':
             case 'wysiwyg':
             case 'time':
-            case 'select':
                 $def['type'] = Type::string();
+                break;
+            case 'select':
+                if (isset($field['opts']['multiple']) && $field['opts']['multiple']) {
+                    $def['type'] = Type::listOf(Type::string());
+                } else {
+                    $def['type'] = Type::string();
+                }
                 break;
             case 'boolean':
                 $def['type'] = Type::boolean();
                 break;
             case 'number':
-                $def['type'] = Type::int();
+                $def['type'] = NumericType::instance();
                 break;
             case 'layout':
                 $def['type'] = JsonType::instance();
                 break;
+            case 'tags':
+                $def['type'] = Type::listOf(Type::string());
+                break;
             case 'set':
                 $def['type'] = new ObjectType([
-                    'name' => self::getName('Set'.ucfirst($field['name'])),
+                    'name' => self::getName('Set'.\ucfirst($field['name'])),
                     'fields' => self::buildFieldsDefinitions($field['opts'])
                 ]);
                 break;
@@ -87,7 +96,7 @@ class FieldTypes {
                 $def['type'] = JsonType::instance();
         }
 
-        return count($def) ? $def : null;
+        return \count($def) ? $def : null;
     }
 
 

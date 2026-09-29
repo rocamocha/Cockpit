@@ -6,12 +6,14 @@
 
 namespace OpenApi\Annotations;
 
+use OpenApi\Attributes\JsonContent;
+use OpenApi\Attributes\XmlContent;
 use OpenApi\Generator;
 
 /**
  * Describes a single request body.
  *
- * @see [OAI Request Body Object](https://github.com/OAI/OpenAPI-Specification/blob/main/versions/3.1.0.md#requestBodyObject)
+ * @see [Request Body Object](https://spec.openapis.org/oas/v3.1.1.html#request-body-object)
  *
  * @Annotation
  */
@@ -20,14 +22,14 @@ class RequestBody extends AbstractAnnotation
     /**
      * The relative or absolute path to a request body.
      *
-     * @see [Using refs](https://swagger.io/docs/specification/using-ref/)
+     * @see [Reference Object](https://spec.openapis.org/oas/v3.1.1.html#reference-object)
      *
      * @var string|class-string|object
      */
     public $ref = Generator::UNDEFINED;
 
     /**
-     * Request body model name.
+     * The key into Components->requestBodies array.
      *
      * @var string
      */
@@ -60,7 +62,7 @@ class RequestBody extends AbstractAnnotation
      * The key is a media type or media type range and the value describes it. For requests that match multiple keys,
      * only the most specific key is applicable. e.g. text/plain overrides text/*.
      *
-     * @var array<MediaType>|MediaType|JsonContent|XmlContent|Attachable
+     * @var array<MediaType|JsonContent|XmlContent>|MediaType|JsonContent|XmlContent|Attachable
      */
     public $content = Generator::UNDEFINED;
 
@@ -93,4 +95,17 @@ class RequestBody extends AbstractAnnotation
         MediaType::class => ['content', 'mediaType'],
         Attachable::class => ['attachables'],
     ];
+
+    /**
+     * @inheritdoc
+     */
+    #[\ReturnTypeWillChange]
+    public function jsonSerialize()
+    {
+        $data = parent::jsonSerialize();
+
+        unset($data->request);
+
+        return $data;
+    }
 }

@@ -1,6 +1,6 @@
 <?php
 
-const APP_VERSION = '2.6.3';
+const APP_VERSION = '2.14.1';
 
 if (!defined('APP_ADMIN')) define('APP_ADMIN', false);
 if (!defined('APP_CLI')) define('APP_CLI', PHP_SAPI == 'cli');
@@ -14,11 +14,26 @@ require_once(__DIR__.'/lib/_autoload.php');
 // load .env file if exists
 DotEnv::load(APP_DIR);
 
+if (!function_exists('env')) {
+
+    function env($key, $default = null) {
+        return DotEnv::value($key, $default);
+    }
+}
+
 class Cockpit {
 
     protected static array $instance = [];
 
-    public static function instance(?string $envDir = null, array $config = []): Lime\App {
+    /*
+     * Public interface to initialize the Cockpit instance.
+     *
+     * @param string $envDir The environment directory.
+     * @param array $config The configuration array.
+     * @param array $modulesPaths The modules paths array.
+     * @return Lime\App The initialized Lime application.
+    */
+    public static function instance(?string $envDir = null, array $config = [], array $modulesPaths = []): Lime\App {
 
         if (!$envDir) {
             $envDir = APP_DIR;
@@ -31,6 +46,13 @@ class Cockpit {
         return static::$instance[$envDir];
     }
 
+    /*
+     * Initialize the Cockpit instance.
+     *
+     * @param string $envDir The environment directory.
+     * @param array $config The configuration array.
+     * @return Lime\App The initialized Lime application.
+    */
     protected static function init(?string $envDir = null, array $config = []): Lime\App {
 
         $appDir = APP_DIR;
@@ -46,7 +68,11 @@ class Cockpit {
         }
 
         if (file_exists("{$envDir}/config/config.php")) {
+
             $cfg = include("{$envDir}/config/config.php");
+
+            //resolve env vars (eg ${DB_SERVER}) based values
+            DotEnv::resolveEnvsInArray($cfg);
         }
 
         $config = array_replace_recursive([
@@ -76,7 +102,7 @@ class Cockpit {
             'paths' => [
                 '#app'     => __DIR__,
                 '#root'    => $envDir,
-                '#config'  => $envDir.'/config',
+                '#config'   => $envDir.'/config',
                 '#modules' => $envDir.'/modules',
                 '#addons'  => $envDir.'/addons',
                 '#storage' => $envDir.'/storage',
@@ -123,49 +149,74 @@ class Cockpit {
                 ],
             ]);
 
+            $urls = [
+                'root' => rtrim($app->pathToUrl('#root:', true), '/'),
+                'tmp' => rtrim($app->pathToUrl('#tmp:', true), '/'),
+                'cache' => rtrim($app->pathToUrl('#cache:', true), '/'),
+                'uploads' => rtrim($app->pathToUrl('#uploads:', true), '/'),
+            ];
+
+            if (isset($config['app_space']) && $config['app_space']) {
+
+                foreach ($urls as $key => $url) {
+                    if (
+                        str_ends_with($url, "/.spaces/{$config['app_space']}") ||
+                        str_contains($url, "/.spaces/{$config['app_space']}/")
+                    ) {
+                        $urls[$key] = str_replace("/.spaces/{$config['app_space']}", "/:{$config['app_space']}", $url);
+                    }
+                }
+            }
+
             $storages = array_replace_recursive([
 
                 '#app' => [
                     'adapter' => 'League\Flysystem\Local\LocalFilesystemAdapter',
                     'args' => [$app->path('#app:')],
                     'mount' => true,
-                    'url' => $app->pathToUrl('#app:', true)
+                    'url' => rtrim($app->pathToUrl('#app:', true), '/')
+                ],
+
+                '#root' => [
+                    'adapter' => 'League\Flysystem\Local\LocalFilesystemAdapter',
+                    'args' => [$app->path('#root:')],
+                    'mount' => true,
+                    'url' => rtrim($app->pathToUrl('#root:', true), '/')
+                ],
+
+                '#uploads' => [
+                    'adapter' => 'League\Flysystem\Local\LocalFilesystemAdapter',
+                    'args' => [$app->path('#uploads:'), $visibility],
+                    'mount' => true,
+                    'url' => $urls['uploads']
                 ],
 
                 'root' => [
                     'adapter' => 'League\Flysystem\Local\LocalFilesystemAdapter',
                     'args' => [$app->path('#root:')],
                     'mount' => true,
-                    'url' => $app->pathToUrl('#root:', true)
+                    'url' => $urls['root']
                 ],
 
                 'tmp' => [
                     'adapter' => 'League\Flysystem\Local\LocalFilesystemAdapter',
                     'args' => [$app->path('#tmp:'), $visibility],
                     'mount' => true,
-                    'url' => $app->pathToUrl('#tmp:', true)
+                    'url' => $urls['tmp']
                 ],
 
                 'cache' => [
                     'adapter' => 'League\Flysystem\Local\LocalFilesystemAdapter',
                     'args' => [$app->path('#cache:'), $visibility],
                     'mount' => true,
-                    'url' => $app->pathToUrl('#cache:', true)
+                    'url' => $urls['cache']
                 ],
 
                 'uploads' => [
                     'adapter' => 'League\Flysystem\Local\LocalFilesystemAdapter',
                     'args' => [$app->path('#uploads:'), $visibility],
                     'mount' => true,
-                    'url' => $app->pathToUrl('#uploads:', true)
-                ],
-
-                // local uploads folder
-                '#uploads' => [
-                    'adapter' => 'League\Flysystem\Local\LocalFilesystemAdapter',
-                    'args' => [$app->path('#uploads:'), $visibility],
-                    'mount' => true,
-                    'url' => $app->pathToUrl('#uploads:', true)
+                    'url' => $urls['uploads']
                 ],
 
             ], $config['fileStorage'] ?? []);
@@ -203,7 +254,24 @@ class Cockpit {
                 parse_str($options, $options);
             }
 
-            return new Mailer($options['transport'] ?? 'mail', $options);
+            $accounts = [];
+
+            if (isset($options['transport'])) {
+                $accounts['default'] = $options;
+            } elseif (is_array($options)) {
+
+                $accounts = $options;
+
+                foreach ($accounts as $key => $value) {
+                    if (is_string($value)) {
+                        parse_str($value, $accounts[$key]);
+                    }
+                }
+            }
+
+            $app->trigger('app.mailer.init', [&$accounts]);
+
+            return new Mailer($accounts);
         });
 
         $modulesPaths = [
@@ -224,14 +292,41 @@ class Cockpit {
 
             set_exception_handler(function($exception) use($app) {
 
+                if ($exception instanceof \Lime\StopException) {
+                    return;
+                }
+
                 $error = [
+                    'time' => date('d-M-Y H:i:s'),
                     'message' => $exception->getMessage(),
-                    'file' => $exception->getFile(),
+                    'file' => str_replace(APP_DIR, '', str_replace(DIRECTORY_SEPARATOR, '/', $exception->getFile())),
                     'line' => $exception->getLine(),
                     'trace' => array_slice($exception->getTrace(), 0, 4),
                 ];
 
                 $app->trigger('error', [$error, $exception]);
+
+                // output error to system error log
+                if (function_exists('ini_get') && ini_get('error_log')) {
+                    try {
+                        error_log("[{$error['time']}] COCKPIT[ERROR]: {$error['message']} @{$error['file']}:{$error['line']}\n", 3, ini_get('error_log'));
+                    } catch (\Throwable $e) {}
+                }
+            });
+
+            set_error_handler(function($errno, $errstr, $errfile, $errline) use($app, $config)  {
+
+                if (!isset($app->request)) return false;
+                if (!$config['debug']) return true;
+
+                switch ($errno) {
+                    case E_WARNING:
+                    case E_USER_WARNING:
+                    case E_USER_ERROR:
+                        throw new ErrorException($errstr, 0, $errno, $errfile, $errline);
+                    default:
+                        return false;
+                }
             });
         }
 
@@ -245,7 +340,16 @@ class Cockpit {
         return $app;
     }
 
-    protected static function loadModules($envDir, $app, $config, $modulesPaths) {
+    /*
+     * Load modules.
+     *
+     * @param string $envDir The environment directory.
+     * @param Lime\App $app The Lime application.
+     * @param array $config The configuration array.
+     * @param array $modulesPaths The modules paths array.
+     * @return void
+    */
+    protected static function loadModules(string $envDir, Lime\App $app, array $config = [], array $modulesPaths = []): void {
 
         if ($config['debug']) {
             $app->loadModules($modulesPaths);
@@ -276,7 +380,7 @@ class Cockpit {
             $cache = include($cacheFile);
 
             if (APP_VERSION !== $cache['version'] || $cache['env'] !== $envDir) {
-                unlink($cacheFile);
+                @unlink($cacheFile);
                 $app->loadModules($modulesPaths);
             } else {
 

@@ -6,23 +6,25 @@
 
 namespace OpenApi\Attributes;
 
+use OpenApi\Annotations as OA;
 use OpenApi\Generator;
 
 #[\Attribute(\Attribute::TARGET_METHOD | \Attribute::TARGET_PROPERTY | \Attribute::TARGET_PARAMETER | \Attribute::TARGET_CLASS_CONSTANT | \Attribute::IS_REPEATABLE)]
-class Property extends \OpenApi\Annotations\Property
+class Property extends OA\Property
 {
     /**
-     * @param string|class-string|object|null                 $ref
-     * @param string[]                                        $required
-     * @param Property[]                                      $properties
-     * @param int|float                                       $maximum
-     * @param int|float                                       $minimum
-     * @param string[]|int[]|float[]|\UnitEnum[]|class-string $enum
-     * @param array<Schema|\OpenApi\Annotations\Schema>       $allOf
-     * @param array<Schema|\OpenApi\Annotations\Schema>       $anyOf
-     * @param array<Schema|\OpenApi\Annotations\Schema>       $oneOf
-     * @param array<string,mixed>|null                        $x
-     * @param Attachable[]|null                               $attachables
+     * @param string|class-string|object|null                               $ref
+     * @param string[]                                                      $required
+     * @param Property[]                                                    $properties
+     * @param string|non-empty-array<string>|null                           $type
+     * @param int|float                                                     $maximum
+     * @param int|float                                                     $minimum
+     * @param array<string|int|float|bool|\UnitEnum|null>|class-string|null $enum
+     * @param array<Schema|OA\Schema>                                       $allOf
+     * @param array<Schema|OA\Schema>                                       $anyOf
+     * @param array<Schema|OA\Schema>                                       $oneOf
+     * @param array<string,mixed>|null                                      $x
+     * @param Attachable[]|null                                             $attachables
      */
     public function __construct(
         ?string $property = null,
@@ -30,20 +32,20 @@ class Property extends \OpenApi\Annotations\Property
         string|object|null $ref = null,
         ?string $schema = null,
         ?string $title = null,
-        ?string $description = null,
+        ?string $description = Generator::UNDEFINED,
         ?int $maxProperties = null,
         ?int $minProperties = null,
         ?array $required = null,
         ?array $properties = null,
-        ?string $type = null,
+        string|array|null $type = null,
         ?string $format = null,
         ?Items $items = null,
         ?string $collectionFormat = null,
         mixed $default = Generator::UNDEFINED,
         $maximum = null,
-        ?bool $exclusiveMaximum = null,
+        bool|int|float|null $exclusiveMaximum = null,
         $minimum = null,
-        ?bool $exclusiveMinimum = null,
+        bool|int|float|null $exclusiveMinimum = null,
         ?int $maxLength = null,
         ?int $minLength = null,
         ?int $maxItems = null,
@@ -63,6 +65,9 @@ class Property extends \OpenApi\Annotations\Property
         ?array $anyOf = null,
         ?array $oneOf = null,
         AdditionalProperties|bool|null $additionalProperties = null,
+        ?array $patternProperties = null,
+        ?array $unevaluatedProperties = null,
+        ?Encoding $encoding = null,
         // annotation
         ?array $x = null,
         ?array $attachables = null
@@ -73,7 +78,7 @@ class Property extends \OpenApi\Annotations\Property
             'ref' => $ref ?? Generator::UNDEFINED,
             'schema' => $schema ?? Generator::UNDEFINED,
             'title' => $title ?? Generator::UNDEFINED,
-            'description' => $description ?? Generator::UNDEFINED,
+            'description' => $description,
             'maxProperties' => $maxProperties ?? Generator::UNDEFINED,
             'minProperties' => $minProperties ?? Generator::UNDEFINED,
             'required' => $required ?? Generator::UNDEFINED,
@@ -103,10 +108,13 @@ class Property extends \OpenApi\Annotations\Property
             'anyOf' => $anyOf ?? Generator::UNDEFINED,
             'oneOf' => $oneOf ?? Generator::UNDEFINED,
             'additionalProperties' => $additionalProperties ?? Generator::UNDEFINED,
+            'patternProperties' => $patternProperties ?? Generator::UNDEFINED,
+            'unevaluatedProperties' => $unevaluatedProperties ?? Generator::UNDEFINED,
+            'encoding' => $encoding ?? Generator::UNDEFINED,
             // annotation
             'x' => $x ?? Generator::UNDEFINED,
             'attachables' => $attachables ?? Generator::UNDEFINED,
-            'value' => $this->combine($items, $discriminator, $externalDocs, $attachables),
+            'value' => $this->combine($items, $discriminator, $externalDocs),
         ]);
     }
 }

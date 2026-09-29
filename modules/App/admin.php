@@ -16,80 +16,100 @@ $this->bind('/', function() {
     return $this->invoke('App\\Controller\\Dashboard', 'index');
 });
 
+$resolveAdminSessionState = function() {
+
+    $user = $this->helper('auth')->getUser();
+    $status = $user ? true : false;
+    $start  = $this->helper('session')->read('app.session.start', 0);
+
+    // check for inactivity: 90min by default
+    if ($status && $start && ($start + $this->retrieve('session.lifetime', 5400) < time())) {
+        $this->helper('auth')->logout();
+        $status = false;
+        $user = null;
+    }
+
+    return [
+        'user' => $user,
+        'status' => $status,
+        'csrf' => $status ? $this->helper('csrf')->token('app.csrf') : null,
+    ];
+};
+
 // global event stream for long polling
-$this->bind('/app-event-stream', function() {
+$this->bind('/app-event-stream', function() use ($resolveAdminSessionState) {
 
     $now = time();
     $lastCheck = $this->helper('session')->read('app.eventstream.lastcheck', $now);
-
-    $user = $this->helper('auth')->getUser();
-
-    if (!$user) {
-        return $this->stop(404);
-    }
-
+    $session = $resolveAdminSessionState();
     $sessionId = md5(session_id());
 
     $this->helper('session')->write('app.eventstream.lastcheck', $now);
     $this->helper('session')->close();
 
-    // auto-cleanup unrelevant events
-    $this->helper('eventStream')->cleanup();
+    $events = [];
 
-    if (strtotime('-5 minutes') > $lastCheck) {
-        return [];
+    if ($session['status'] && $session['user']) {
+
+        // auto-cleanup unrelevant events
+        $this->helper('eventStream')->cleanup();
+
+        // get all events since last check
+        $events = $this->helper('eventStream')->getEvents($lastCheck);
+
+        // filter events
+        $events = array_filter($events, function($event) use($session, $sessionId) {
+
+            if (isset($event['options']['to'])) {
+
+                if (is_array($event['options']['to']) && !in_array($session['user']['_id'], $event['options']['to'])) {
+                    return false;
+                } elseif ($event['options']['to'] != $session['user']['_id']) {
+                    return false;
+                }
+            }
+
+            if (isset($event['options']['sessionId'])) {
+
+                if (is_array($event['options']['sessionId']) && !in_array($sessionId, $event['options']['sessionId'])) {
+                    return false;
+                } elseif ($event['options']['sessionId'] != $sessionId) {
+                    return false;
+                }
+            }
+
+            return true;
+        });
     }
 
-    // get all events since last check
-    $events = $this->helper('eventStream')->getEvents($lastCheck);
-
-    // filter events
-    $events = array_filter($events, function($event) use($user, $sessionId) {
-
-        if (isset($event['options']['to'])) {
-
-            if (is_array($event['options']['to']) && !in_array($user['_id'], $event['options']['to'])) {
-                return false;
-            } elseif ($event['options']['to'] != $user['_id']) {
-                return false;
-            }
-        }
-
-        if (isset($event['options']['sessionId'])) {
-
-            if (is_array($event['options']['sessionId']) && !in_array($sessionId, $event['options']['sessionId'])) {
-                return false;
-            } elseif ($event['options']['sessionId'] != $sessionId) {
-                return false;
-            }
-        }
-
-        return true;
-    });
-
-    return $events;
+    return [
+        'status' => $session['status'],
+        'csrf' => $session['csrf'],
+        'events' => array_values($events),
+    ];
 });
 
 
 // check + validate session time
-$this->on('app.admin.request', function(Lime\Request $request) {
+$this->on('app.admin.request', function(Lime\Request $request) use ($resolveAdminSessionState) {
 
     $user = $this->helper('auth')->getUser();
 
     if (in_array($request->route, ['/check-session', '/app-event-stream'])) {
 
-        $status = $user ? true : false;
-        $start  = $this->helper('session')->read('app.session.start', 0);
+        if ($request->route == '/check-session') {
 
-        // check for inactivity: 90min by default
-        if ($status && $start && ($start + $this->retrieve('session.lifetime', 5400) < time())) {
-            $this->helper('auth')->logout();
-            $status = false;
+            $session = $resolveAdminSessionState();
+
+            $this->bind('/check-session', function() use($session) {
+
+                return [
+                    'status' => $session['status'],
+                    'csrf' => $session['csrf'],
+                ];
+
+            }, true);
         }
-
-        $this->bind('/check-session', function() use($status) {
-            return compact('status');
-        }, $request->route == '/check-session');
 
         return;
     }
@@ -100,19 +120,24 @@ $this->on('app.admin.request', function(Lime\Request $request) {
 
     $locale = $user && isset($user['i18n']) && $user['i18n'] ? $user['i18n'] : $i18n->locale;
 
-    if ($locale !== 'en' && $translationspath = $this->path("#config:i18n/{$locale}/App.php")) {
+    if ($locale !== 'en') {
 
         $i18n->locale = $locale;
+        $i18nConfigFolder = '#config:i18n';
+
+        if (!$this->helper('spaces')->isMaster() && !$this->path($i18nConfigFolder)) {
+            $i18nConfigFolder = '#app:config/i18n';
+        }
 
         foreach ($this->retrieve('modules')->getArrayCopy() as $m) {
 
             $name = basename($m->_dir);
+            $i18nPath = $this->path("{$i18nConfigFolder}/{$locale}/{$name}.php");
 
-            if ($translationspath = $this->path("#config:i18n/{$locale}/{$name}.php")) {
-                $i18n->load($translationspath, $locale);
-            } elseif($translationspath = $this->path("{$name}:i18n/{$locale}.json")) {
-                $i18n->load($translationspath, $locale);
-            }
+            if (!$i18nPath) $i18nPath = $this->path("{$name}:i18n/{$locale}.php");
+            if (!$i18nPath) continue;
+
+            $i18n->load($i18nPath, $locale);
         }
     }
 
@@ -138,6 +163,7 @@ $this->on('app.admin.request', function(Lime\Request $request) {
 
     // update session time
     $this->helper('session')->write('app.session.start', time());
+
 }, 1000);
 
 
@@ -147,7 +173,9 @@ $this->on('app.admin.request', function(Lime\Request $request) {
 $this->on('after', function() {
 
     // prevent possible clickjacking via iframe layer
-    $this->response->headers['X-Frame-Options'] = 'SAMEORIGIN';
+    if ($this->response->mime === 'html') {
+        $this->response->headers['X-Frame-Options'] = 'SAMEORIGIN';
+    }
 
     // handle error pages
     switch ($this->response->status) {

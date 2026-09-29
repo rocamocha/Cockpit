@@ -5,17 +5,17 @@
     </ul>
 
     <div class="kiss-flex kiss-flex-middle">
-        <div class="kiss-margin-small-right">
+        <div class="kiss-margin-small-end">
             <kiss-svg class="kiss-margin-auto" src="<?=$this->base(isset($model['icon']) && $model['icon'] ? $model['icon'] : 'content:assets/icons/singleton.svg')?>" width="30" height="30" style="color:<?=($this->escape($model['color'] ?? 'inherit'))?>"><canvas width="35" height="35"></canvas></kiss-svg>
         </div>
-        <a class="kiss-color-muted kiss-margin-small-right" onclick="VueView.ui.offcanvas('content:assets/dialogs/switch-model-view.js')">
+        <a class="kiss-color-muted kiss-margin-small-end" onclick="VueView.ui.offcanvas('content:assets/dialogs/switch-model-view.js')">
             <icon>expand_circle_down</icon>
         </a>
-        <div class="kiss-margin-small-right">
+        <div class="kiss-margin-small-end">
             <div class="kiss-size-5 kiss-text-bold"><?=$this->escape($model['label'] ? $model['label'] : $model['name'])?></div>
         </div>
         <div>
-            <a class="kiss-size-large" kiss-popout="#model-item-menu-actions"><icon>more_horiz</icon></a>
+            <a class="kiss-size-large" href kiss-popout="#model-item-menu-actions"><icon>more_horiz</icon></a>
         </div>
     </div>
 
@@ -36,10 +36,11 @@
             </div>
 
             <kiss-row class="kiss-margin-large" gap="large" :class="{'kiss-disabled': saving}" v-if="fields.length">
+                <div class="kiss-visible@m kiss-width-1-5@m kiss-width-1-8@xl kiss-width-max-small">
+                    <kiss-sticky id="content-fields-outline" data-offset="20"></kiss-sticky>
+                </div>
                 <div class="kiss-flex-1">
-                    <div class="kiss-width-3-4@xl kiss-margin-auto">
-                        <fields-renderer v-model="item" :fields="fields" :locales="locales"></fields-renderer>
-                    </div>
+                    <fields-renderer v-model="item" :fields="fields" :locales="locales" outline="#content-fields-outline"></fields-renderer>
                 </div>
                 <div class="kiss-width-1-4@m kiss-width-1-5@xl">
 
@@ -51,16 +52,16 @@
 
                             <div class="kiss-margin-xsmall">
                                 <div class="kiss-flex kiss-flex-middle">
-                                    <div class="kiss-size-4 kiss-margin-small-right kiss-flex kiss-color-muted" :title="t('Created at')"><icon>more_time</icon></div>
-                                    <div class="kiss-text-truncate kiss-size-small kiss-text-monospace kiss-color-muted kiss-flex-1">{{ (new Date(item._created * 1000).toLocaleString()) }}</div>
+                                    <div class="kiss-size-4 kiss-margin-small-end kiss-flex kiss-color-muted" :title="t('Created at')"><icon>more_time</icon></div>
+                                    <div class="kiss-text-truncate kiss-size-small kiss-text-monospace kiss-color-muted kiss-flex-1"><app-datetime :datetime="item._created" /></div>
                                     <user-info :user-id="item._cby"></user-info>
                                 </div>
                             </div>
 
                             <div class="kiss-margin-xsmall" v-if="item._created != item._modified">
                                 <div class="kiss-flex kiss-flex-middle">
-                                    <div class="kiss-size-4 kiss-margin-small-right kiss-flex kiss-color-muted" :title="t('Modified at')"><icon>history</icon></div>
-                                    <div class="kiss-text-truncate kiss-size-small kiss-text-monospace kiss-color-muted kiss-flex-1">{{ (new Date(item._modified * 1000).toLocaleString()) }}</div>
+                                    <div class="kiss-size-4 kiss-margin-small-end kiss-flex kiss-color-muted" :title="t('Modified at')"><icon>history</icon></div>
+                                    <div class="kiss-text-truncate kiss-size-small kiss-text-monospace kiss-color-muted kiss-flex-1"><app-datetime :datetime="item._modified" /></div>
                                     <user-info :user-id="item._mby"></user-info>
                                 </div>
                             </div>
@@ -89,14 +90,14 @@
                         <div class="kiss-text-caption kiss-size-xsmall kiss-text-bold">{{ t('Translation') }}</div>
 
                         <kiss-card class="kiss-padding-small kiss-margin-small kiss-text-muted kiss-size-small kiss-color-muted kiss-flex kiss-flex-middle" theme="bordered" v-if="!locales.length">
-                            <span class="kiss-flex-1 kiss-margin-small-right">{{ t('No locales.') }}</span>
+                            <span class="kiss-flex-1 kiss-margin-small-end">{{ t('No locales.') }}</span>
                             <a class="kiss-size-xsmall kiss-text-bolder" href="<?=$this->route('/system/locales')?>">{{ t('Manage') }}</a>
                         </kiss-card>
 
                         <div class="kiss-margin-small" v-if="locales.length">
 
-                            <kiss-card class="kiss-position-relative kiss-padding-small kiss-margin-small kiss-text-bolder kiss-flex kiss-flex-middle" :class="{'kiss-color-muted': !loc.visible}" :theme="!loc.visible ? 'bordered':'bordered contrast'" v-for="loc in locales">
-                                <icon class="kiss-margin-small-right" :class="{'kiss-color-primary': loc.visible}">{{ loc.visible ? 'visibility' : 'visibility_off' }}</icon>
+                            <kiss-card class="kiss-position-relative kiss-padding-small kiss-margin-xsmall kiss-text-bolder kiss-flex kiss-flex-middle" :class="{'kiss-color-muted': !loc.visible}" :theme="!loc.visible ? 'bordered':'bordered contrast'" v-for="loc in locales">
+                                <icon class="kiss-margin-small-end" :class="{'kiss-color-primary': loc.visible}">{{ loc.visible ? 'visibility' : 'visibility_off' }}</icon>
                                 <span class="kiss-size-small kiss-flex-1">{{ loc.name }}</span>
                                 <span class="kiss-color-muted kiss-size-xsmall" v-if="loc.i18n == 'default'">{{ t('Default') }}</span>
                                 <a class="kiss-cover" @click="loc.visible = !loc.visible"></a>
@@ -149,15 +150,15 @@
                         <ul>
                             <li class="kiss-nav-header"><?=t('Model actions')?></li>
                             <li>
-                                <a class="kiss-flex kiss-flex-middle" @click="showJSON()">
-                                    <icon class="kiss-margin-small-right">manage_search</icon>
-                                    <?=t('Json Object')?>
+                                <a class="kiss-flex kiss-flex-middle" href @click.prevent="showJSON()">
+                                    <icon class="kiss-margin-small-end">manage_search</icon>
+                                    <?=t('JSON Object')?>
                                 </a>
                             </li>
                             <li class="kiss-nav-divider"></li>
                             <li>
                                 <a class="kiss-flex kiss-flex-middle" href="<?=$this->route("/content/models/edit/{$model['name']}")?>">
-                                    <icon class="kiss-margin-small-right">create</icon>
+                                    <icon class="kiss-margin-small-end">create</icon>
                                     <?=t('Edit model')?>
                                 </a>
                             </li>
@@ -176,13 +177,13 @@
                         <ul class="app-list-items kiss-margin-small-top">
                             <li>
                                 <a class="kiss-flex kiss-flex-middle" :class="{'kiss-color-muted': item._state != 1, 'kiss-text-bold': item._state == 1}" @click="item._state=1">
-                                    <icon class="kiss-margin-small-right">{{ item._state != 1 ? 'radio_button_unchecked' : 'radio_button_checked'}}</icon>
+                                    <icon class="kiss-margin-small-end">{{ item._state != 1 ? 'radio_button_unchecked' : 'radio_button_checked'}}</icon>
                                     <?=t('Published')?>
                                 </a>
                             </li>
                             <li>
                                 <a class="kiss-flex kiss-flex-middle" :class="{'kiss-color-muted': item._state != 0, 'kiss-text-bold': item._state == 0}" @click="item._state=0">
-                                    <icon class="kiss-margin-small-right">{{ item._state != 0 ? 'radio_button_unchecked' : 'radio_button_checked'}}</icon>
+                                    <icon class="kiss-margin-small-end">{{ item._state != 0 ? 'radio_button_unchecked' : 'radio_button_checked'}}</icon>
                                     <?=t('Unpublished')?>
                                 </a>
                             </li>
@@ -199,7 +200,7 @@
                             <li class="kiss-nav-header"><?=t('Open preview')?></li>
                             <li v-for="preview in model.preview">
                                 <a class="kiss-flex kiss-flex-middle" @click="showPreviewUri(preview.uri)">
-                                    <icon class="kiss-margin-small-right">travel_explore</icon>
+                                    <icon class="kiss-margin-small-end">travel_explore</icon>
                                     {{ preview.name }}
                                 </a>
                             </li>
@@ -212,23 +213,23 @@
 
         <script type="module">
 
+            import {useDirtyCheck} from "module-app/assets/vue-components/dirty-check.js";
+
             export default {
+
+                mixins: [useDirtyCheck('item')],
+
                 data() {
                     return {
                         model: <?=json_encode($model)?>,
                         item: <?=json_encode($item)?>,
                         fields: <?=json_encode($fields)?>,
                         locales: <?=json_encode($locales)?>,
-                        saving: false,
-                        savedItemState: null
+                        saving: false
                     }
                 },
 
                 computed: {
-
-                    isModified() {
-                        return JSON.stringify(this.item) != this.savedItemState;
-                    },
 
                     hasLocales() {
 
@@ -237,24 +238,6 @@
                         }
                         return false;
                     }
-                },
-
-                mounted() {
-
-                    setTimeout(() => {
-
-                        this.savedItemState = JSON.stringify(this.item);
-
-                        window.onbeforeunload = e => {
-
-                            if (this.isModified) {
-                                e.preventDefault();
-                                e.returnValue = this.t('You have unsaved data! Are you sure you want to leave?');
-                            }
-                        };
-
-                    }, 1500);
-
                 },
 
                 methods: {
@@ -276,7 +259,9 @@
                         this.$request(`/content/models/saveItem/${model}`, {item: this.item}).then(item => {
 
                             this.item = Object.assign(this.item, item);
-                            this.savedItemState = JSON.stringify(this.item);
+
+                            this.resetDirtyState();
+
                             this.saving = false;
                             App.ui.notify('Data updated!');
 
@@ -287,7 +272,7 @@
                     },
 
                     showJSON() {
-                        VueView.ui.offcanvas('system:assets/dialogs/json-viewer.js', {data: this.item}, {}, {flip: true, size: 'large'})
+                        VueView.ui.offcanvas('system:assets/dialogs/json-viewer.js', {data: this.item}, {})
                     },
 
                     showPreviewUri(uri) {
@@ -300,7 +285,7 @@
                             context: {
                                 model: this.model.name
                             },
-                            resolver: _.debounce((data, update) => {
+                            resolver: KISS.utils.debounce((data, update) => {
 
                                 this.$request(`/content/populate`, {data: data.data, locale: data.locale}).then(resolvedData => {
                                     update(Object.assign(data, {data: resolvedData}));
@@ -313,7 +298,7 @@
                             update: (item) => {
                                 this.item = Object.assign(this.item, item);
                             }
-                        }, {size: 'screen'})
+                        });
                     }
                 }
             }

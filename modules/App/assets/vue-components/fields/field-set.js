@@ -1,3 +1,5 @@
+import {FieldRenderer} from '../../../../System/assets/vue-components/fields/renderer.js';
+
 export default {
 
     _meta: {
@@ -24,7 +26,7 @@ export default {
                 output = App.utils.$interpolate(field.opts.display, { /* deprecated */ value, data:value});
             } catch(e) {}
 
-            return output;
+            return DOMPurify.sanitize(output);
         }
     },
 
@@ -37,12 +39,20 @@ export default {
 
     props: {
         modelValue: {
-            default: {}
+            default: () => ({})
         },
         fields: {
             type: Array,
-            default: []
+            default: () => []
         },
+        mode: {
+            type: String,
+            default: 'form'
+        }
+    },
+
+    components: {
+        FieldRenderer
     },
 
     watch: {
@@ -67,7 +77,12 @@ export default {
 
     template: /*html*/`
         <div class="kiss-position-relative" field="set">
-            <fields-renderer v-model="val" :fields="fields" :nested="true"></fields-renderer>
+            <kiss-tabs v-if="mode==='tabs'">
+                <tab v-for="field in fields" :key="field.name" :caption="field.label || field.name">
+                    <field-renderer :field="field" v-model="val[field.name]"></field-renderer>
+                </tab>
+            </kiss-tabs>
+            <fields-renderer v-model="val" :fields="fields" :nested="true" v-if="mode!=='tabs'"></fields-renderer>
         </div>
     `
 }

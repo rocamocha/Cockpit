@@ -13,7 +13,7 @@ use OpenApi\Generator;
  *
  * A unique parameter is defined by a combination of a name and location.
  *
- * @see [OAA Parameter Object](https://github.com/OAI/OpenAPI-Specification/blob/main/versions/3.1.0.md#parameter-object)
+ * @see [Parameter Object](https://spec.openapis.org/oas/v3.1.1.html#parameter-object)
  *
  * @Annotation
  */
@@ -22,7 +22,7 @@ class Parameter extends AbstractAnnotation
     /**
      * The relative or absolute path to the endpoint.
      *
-     * @see [Using refs](https://swagger.io/docs/specification/using-ref/)
+     * @see [Reference Object](https://spec.openapis.org/oas/v3.1.1.html#reference-object)
      *
      * @var string|class-string|object
      */
@@ -143,19 +143,17 @@ class Parameter extends AbstractAnnotation
      * The example object is mutually exclusive of the examples object.
      * Furthermore, if referencing a schema which contains an example, the example value shall override the example provided by the schema.
      * To represent examples of media types that cannot naturally be represented in JSON or YAML, a string value can contain the example with escaping where necessary.
-     *
-     * @var mixed
      */
     public $example = Generator::UNDEFINED;
 
     /**
-     * Examples of the media type.
+     * Examples of the parameter.
      *
      * Each example should contain a value in the correct format as specified in the parameter encoding.
      * The examples object is mutually exclusive of the example object.
      * Furthermore, if referencing a schema which contains an example, the examples value shall override the example provided by the schema.
      *
-     * @var array<string,Examples>
+     * @var array<Examples>
      */
     public $examples = Generator::UNDEFINED;
 
@@ -271,7 +269,7 @@ class Parameter extends AbstractAnnotation
     /**
      * @inheritdoc
      */
-    public function validate(array $stack = [], array $skip = [], string $ref = '', $context = null): bool
+    public function validate(array $stack = [], array $skip = [], string $ref = '', ?object $context = null): bool
     {
         if (in_array($this, $skip, true)) {
             return true;
@@ -291,11 +289,9 @@ class Parameter extends AbstractAnnotation
         return $valid;
     }
 
-    /**
-     * @inheritdoc
-     */
-    public function identity(): string
+    #[\Override]
+    public function identity(?array $properties = []): string
     {
-        return parent::_identity(['name', 'in']);
+        return parent::identity(['name', 'in']);
     }
 }

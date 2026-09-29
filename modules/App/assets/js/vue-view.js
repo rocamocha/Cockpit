@@ -76,11 +76,15 @@ import ui from "./vue-view/ui.js";
                         return App.i18n.get(key);
                     },
 
-                    $route(url) {
+                    $notify(message, type) {
+                        App.ui.notify(message, type);
+                    },
+
+                    $routeUrl(url) {
                         return App.route(url);
                     },
 
-                    $base(url) {
+                    $baseUrl(url) {
                         return App.base(url);
                     },
 

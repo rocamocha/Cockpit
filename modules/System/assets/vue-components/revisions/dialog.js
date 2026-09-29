@@ -1,5 +1,7 @@
 export default {
 
+    _meta: {flip: true, size: 'xxlarge'},
+
     data() {
 
         return {
@@ -47,7 +49,7 @@ export default {
 
                 if (current.length > 200 || prev.length > 200) {
 
-                    _diffhtml = prev;
+                    _diffhtml = App.utils.escape(prev);
 
                 } else {
 
@@ -62,11 +64,11 @@ export default {
                         }
 
                         if (_diff[i].removed) {
-                            _diffhtml += '<del>'+_diff[i].value+'</del>';
+                            _diffhtml += '<del>'+App.utils.escape(_diff[i].value)+'</del>';
                         } else if (_diff[i].added) {
-                            _diffhtml += '<ins>'+_diff[i].value+'</ins>';
+                            _diffhtml += '<ins>'+App.utils.escape(_diff[i].value)+'</ins>';
                         } else {
-                            _diffhtml += _diff[i].value;
+                            _diffhtml += App.utils.escape(_diff[i].value);
                         }
                     }
                 }
@@ -111,10 +113,13 @@ export default {
                             }
                         })
                     }
+                }).catch(() => {
+                    this.loading = false;
+                    App.ui.notify('Loading diff library failed!', 'error');
                 });
 
             }).catch(rsp => {
-                this.saving = false;
+                this.loading = false;
                 App.ui.notify(rsp.error || 'Loading revisions failed!', 'error');
             });
 
@@ -165,7 +170,7 @@ export default {
                                 <div class="kiss-text-bold kiss-text-caption">{{ item.key }}</div>
 
                                 <kiss-card class="kiss-margin-small-top kiss-padding-small kiss-flex kiss-flex-middle" theme="contrast shadowed" hover="shadow">
-                                    <pre class="kiss-text-monospace kiss-size-small kiss-overflow-y-auto kiss-margin-small-right kiss-flex-1" style="max-height:15vh" v-html="item.diff"></pre>
+                                    <pre class="kiss-text-monospace kiss-size-small kiss-overflow-y-auto kiss-margin-small-end kiss-flex-1" style="max-height:15vh" v-html="item.diff"></pre>
                                     <div><a @click="restoreField(item.key)"><icon class="kiss-size-4">settings_backup_restore</icon></a></div>
                                 </kiss-card>
                             </div>
@@ -182,7 +187,7 @@ export default {
                             <ul class="app-list-items kiss-cover">
                                 <li class="kiss-flex kiss-position-relative" v-for="rev in revisions">
                                     <div class="kiss-flex-1">
-                                        <div :class="(selectedRev == rev) ? 'kiss-color-primary kiss-text-bold':'kiss-size-small kiss-color-muted'">{{ (new Date(rev._created * 1000).toLocaleString()) }}</div>
+                                        <div :class="(selectedRev == rev) ? 'kiss-color-primary kiss-text-bold':'kiss-size-small kiss-color-muted'"><app-datetime :datetime="rev._created" /></div>
                                         <div class="kiss-size-xsmall" :class="(selectedRev == rev) ? '':'kiss-color-muted'">By {{ rev._by && rev._by.user ? rev._by.user : 'n/a' }}</div>
                                     </div>
                                     <a class="kiss-cover" @click="selectedRev = rev"></a>
@@ -198,7 +203,7 @@ export default {
             <div class="kiss-padding">
                 <kiss-row>
                     <div class="kiss-flex-1">
-                        <button class="kiss-button kiss-button-primary kiss-width-1-1 kiss-margin-right" @click="restoreAll()" v-if="selectedRev && changes.length">{{ t('Restore all fields') }}</button>
+                        <button class="kiss-button kiss-button-primary kiss-width-1-1 kiss-margin-end" @click="restoreAll()" v-if="selectedRev && changes.length">{{ t('Restore all fields') }}</button>
                     </div>
                     <div class="kiss-width-1-5">
                         <button class="kiss-button kiss-width-1-1" kiss-offcanvas-close>{{ t('Close') }}</button>

@@ -9,20 +9,20 @@
         <template>
 
             <div class="kiss-flex kiss-flex-middle kiss-margin-bottom">
-                <div class="kiss-margin-small-right">
+                <div class="kiss-margin-small-end">
                     <kiss-svg class="kiss-margin-auto" src="<?= $this->base(isset($model['icon']) && $model['icon'] ? $model['icon'] : 'content:assets/icons/tree.svg') ?>" width="30" height="30" style="color:<?= ($this->escape($model['color'] ?? 'inherit')) ?>"><canvas width="30" height="30"></canvas></kiss-svg>
                 </div>
 
-                <a class="kiss-color-muted kiss-margin-small-right" onclick="VueView.ui.offcanvas('content:assets/dialogs/switch-model-view.js')">
+                <a class="kiss-color-muted kiss-margin-small-end" onclick="VueView.ui.offcanvas('content:assets/dialogs/switch-model-view.js')">
                     <icon>expand_circle_down</icon>
                 </a>
 
-                <div class="kiss-margin-small-right">
-                    <div class="kiss-size-5 kiss-text-bold"><?= $this->escape($model['label'] ? $model['label'] : $model['name']) ?></div>
+                <div class="kiss-margin-small-end">
+                    <div class="kiss-size-4 kiss-text-bold"><?= $this->escape($model['label'] ? $model['label'] : $model['name']) ?></div>
                 </div>
 
-                <kiss-card class="kiss-flex kiss-flex-middle kiss-overlay-input kiss-padding-small kiss-margin-small-right" theme="contrast shadowed" v-if="hasLocalization">
-                    <icon class="kiss-margin-xsmall-right">language</icon>
+                <kiss-card class="kiss-flex kiss-flex-middle kiss-overlay-input kiss-padding-small kiss-margin-small-end" gap="small" theme="contrast shadowed" v-if="hasLocalization">
+                    <icon size="larger">language</icon>
                     <span class="kiss-size-small kiss-text-caption kiss-text-bolder">{{ App._locales[this.locale] }}</span>
                     <select v-model="locale"><option :value="i18n" v-for="(label,i18n) in App._locales">{{label}}</option></select>
                 </kiss-card>
@@ -36,9 +36,11 @@
 
             <form class="kiss-flex kiss-margin" :class="{'kiss-disabled': loading}" @submit.prevent="filter = txtFilter">
 
-                <input type="text" class="kiss-input kiss-flex-1 kiss-margin-xsmall-right" :placeholder="t('Filter items...')" v-model="txtFilter">
+                <app-textcomplete class="kiss-flex-1 kiss-margin-xsmall-end" :items="model.fields.map(f => f.name)" trigger="@">
+                    <input type="text" class="kiss-input" :placeholder="t('Filter items...')" v-model="txtFilter">
+                </app-textcomplete>
 
-                <div class="kiss-button-group kiss-margin-small-left">
+                <div class="kiss-button-group kiss-margin-small-start">
                     <button type="button" class="kiss-button" @click="filter = ''" v-if="filter"><?=t('Reset')?></button>
                     <button class="kiss-button kiss-flex"><?=t('Search')?></button>
                 </div>
@@ -59,16 +61,16 @@
                     <kiss-card class="kiss-padding-small kiss-flex kiss-flex-middle kiss-margin-xsmall" theme="bordered contrast">
                         <div class="kiss-position-relative kiss-flex-1">
                             <tree-item :model="model" :item="item"></tree-item>
-                            <a class="kiss-cover" :href="$route('/content/tree/item/'+model.name+'/'+item._id)"></a>
+                            <a class="kiss-cover" :href="$routeUrl('/content/tree/item/'+model.name+'/'+item._id)"></a>
                         </div>
-                        <a class="kiss-margin-small-left" @click="createItem(item._id)"><icon>create_new_folder</icon></a>
-                        <a class="kiss-margin-small-left kiss-color-danger" @click="remove(item)"><icon>delete</icon></a>
+                        <a class="kiss-margin-small-start" @click="createItem(item._id)"><icon>create_new_folder</icon></a>
+                        <a class="kiss-margin-small-start kiss-color-danger" @click="remove(item)"><icon>delete</icon></a>
                     </kiss-card>
                 </div>
             </div>
 
             <div v-if="loading !== true && (!filter) && Array.isArray(items) && items.length">
-                <items-tree :model="model" :items="items" :locale="locale" :allow-moving="allowMoving"></items-tree>
+                <items-tree :model="model" v-model="items" :locale="locale" :allow-moving="allowMoving"></items-tree>
             </div>
 
             <app-loader v-if="loading === null || loading === true"></app-loader>
@@ -77,7 +79,7 @@
 
                 <app-actionbar>
                     <kiss-container>
-                        <div class="kiss-flex kiss-flex-middle kiss-flex-right">
+                        <div class="kiss-flex kiss-flex-middle kiss-flex-end">
                             <div class="kiss-button-group">
                                 <a class="kiss-button" href="<?= $this->route('/content') ?>"><?=t('Close')?></a>
                                 <a class="kiss-button kiss-button-primary" href="<?= $this->route("/content/tree/item/{$model['name']}") ?>"><?=t('Create item')?></a>
@@ -106,7 +108,6 @@
                 },
 
                 mounted() {
-
                     this.load();
                 },
 
@@ -206,7 +207,7 @@
                     },
 
                     createItem(pid = null) {
-                        location.href = this.$route(`/content/tree/item/${this.model.name}?pid=${pid}`);
+                        location.href = this.$routeUrl(`/content/tree/item/${this.model.name}?pid=${pid}`);
                     }
                 }
             }
@@ -224,14 +225,14 @@
                 <li class="kiss-nav-header"><?= t('Model actions') ?></li>
                 <li>
                     <a class="kiss-flex kiss-flex-middle" href="<?= $this->route("/content/models/edit/{$model['name']}") ?>">
-                        <icon class="kiss-margin-small-right">create</icon>
+                        <icon class="kiss-margin-small-end">create</icon>
                         <?= t('Edit') ?>
                     </a>
                 </li>
                 <li class="kiss-nav-divider"></li>
                 <li>
                     <a class="kiss-flex kiss-flex-middle" href="<?= $this->route("/content/tree/item/{$model['name']}") ?>">
-                        <icon class="kiss-margin-small-right">add_circle</icon>
+                        <icon class="kiss-margin-small-end">add_circle</icon>
                         <?= t('Create item') ?>
                     </a>
                 </li>

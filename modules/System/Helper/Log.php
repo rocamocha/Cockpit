@@ -8,6 +8,12 @@ class Log extends \Lime\Helper {
 
     protected array $channels = [];
 
+    /**
+     * Get a log channel by name.
+     *
+     * @param string $name The name of the channel.
+     * @return LogChannel The log channel.
+     */
     public function channel(string $name): LogChannel {
 
         if (!isset($this->channels[$name])) {
@@ -29,9 +35,17 @@ class LogChannel {
         $this->app = $app;
     }
 
+    /**
+     * Add a log record.
+     *
+     * @param string $message The log message.
+     * @param string $type The log type (e.g. info, error).
+     * @param array|null $context Additional context for the log entry.
+     * @return void
+     */
     protected function addRecord(string $message, $type = 'info', ?array $context = null): void {
 
-        $time = time();
+        $time = \time();
 
         $record = [
             'message' => $message,
@@ -39,7 +53,7 @@ class LogChannel {
             'channel' => $this->name,
             'context' => $context,
             'timestamp' => $time,
-            'datetime' => date('Y-m-d G:i:s T', $time)
+            'datetime' => \date('Y-m-d G:i:s T', $time)
         ];
 
         try {
@@ -47,26 +61,68 @@ class LogChannel {
         } catch(\Throwable $e) {}
     }
 
+    /**
+     * Log an informational message.
+     *
+     * @param string $message The log message.
+     * @param array|null $context Additional context for the log entry.
+     * @return void
+     */
     public function info(string $message, ?array $context = null): void {
         $this->addRecord($message, 'info', $context);
     }
 
+    /**
+     * Log a debug message.
+     *
+     * @param string $message The log message.
+     * @param array|null $context Additional context for the log entry.
+     * @return void
+     */
     public function debug(string $message, ?array $context = null): void {
         $this->addRecord($message, 'debug', $context);
     }
 
+    /**
+     * Log a notice message.
+     *
+     * @param string $message The log message.
+     * @param array|null $context Additional context for the log entry.
+     * @return void
+     */
     public function notice(string $message, ?array $context = null): void {
         $this->addRecord($message, 'notice', $context);
     }
 
+    /**
+     * Log a warning message.
+     *
+     * @param string $message The log message.
+     * @param array|null $context Additional context for the log entry.
+     * @return void
+     */
     public function warning(string $message, ?array $context = null): void {
         $this->addRecord($message, 'warning', $context);
     }
 
+    /**
+     * Log an alert message.
+     *
+     * @param string $message The log message.
+     * @param array|null $context Additional context for the log entry.
+     * @return void
+     */
     public function alert(string $message, ?array $context = null): void {
         $this->addRecord($message, 'alert', $context);
     }
 
+    /**
+     * Log an error message.
+     *
+     * @param string $message The log message.
+     * @param array|null $context Additional context for the log entry.
+     * @return void
+     */
     public function error(string $message, ?array $context = null): void {
         $this->addRecord($message, 'error', $context);
     }

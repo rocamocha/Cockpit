@@ -5,19 +5,29 @@ use PHPMailer\PHPMailer\Exception;
 
 class Mailer {
 
-    protected string $transport;
-    protected array $options;
+    protected array $accounts = [
+        'default' => [
+            'transport' => 'mail',
+            'options' => []
+        ]
+    ];
 
-    public function __construct(string $transport = 'mail', array $options = []) {
+    public function __construct(array $accounts = []) {
 
-        $this->transport = $transport;
-        $this->options = $options;
+        $this->accounts = array_merge($this->accounts, $accounts);
+    }
+
+    public function getAccounts(): array {
+        return array_keys($this->accounts);
+    }
+
+    public function getTransport(string $account = 'default'): string {
+        return $this->accounts[$account]['transport'] ?? 'mail';
     }
 
     public function mail(mixed $to, string $subject, string $message, array $options = []) {
 
-        $options = array_merge($this->options, is_array($options) ? $options: []);
-
+        $options = array_replace_recursive($this->accounts[$options['account'] ?? 'default'], $options);
         $message = $this->createMessage($to, $subject, $message, $options);
 
         if (isset($options['from'])) {
@@ -31,43 +41,52 @@ class Mailer {
         return $message->send();
     }
 
-    public function createMessage(mixed $to, string $subject, string $message, array $options=[]) {
+    public function createMailer(array $options = []): PHPMailer {
+
+        $options = array_replace_recursive($this->accounts[$options['account'] ?? 'default'], $options);
 
         $mail = new PHPMailer(true);
 
-        if ($this->transport == 'smtp') {
+        if (($options['transport'] ?? 'mail') == 'smtp') {
 
             $mail->isSMTP();
 
-            if (isset($this->options['host']) && $this->options['host'])      {
-                $mail->Host = $this->options['host']; // Specify main and backup server
+            if (isset($options['host']) && $options['host'])      {
+                $mail->Host = $options['host']; // Specify main and backup server
             }
 
-            if (isset($this->options['auth']) && $this->options['auth']) {
-                $mail->SMTPAuth = $this->options['auth']; // Enable SMTP authentication
+            if (isset($options['auth']) && $options['auth']) {
+                $mail->SMTPAuth = $options['auth']; // Enable SMTP authentication
             }
 
-            if (isset($this->options['user']) && $this->options['user']) {
-                $mail->Username = $this->options['user']; // SMTP username
+            if (isset($options['user']) && $options['user']) {
+                $mail->Username = $options['user']; // SMTP username
             }
 
-            if (isset($this->options['password']) && $this->options['password']) {
-                $mail->Password = $this->options['password']; // SMTP password
+            if (isset($options['password']) && $options['password']) {
+                $mail->Password = $options['password']; // SMTP password
             }
 
-            if (isset($this->options['port']) && $this->options['port']) {
-                $mail->Port = $this->options['port']; // smtp port
+            if (isset($options['port']) && $options['port']) {
+                $mail->Port = $options['port']; // smtp port
             }
 
-            if (isset($this->options['encryption']) && $this->options['encryption']) {
-                $mail->SMTPSecure = $this->options['encryption']; // Enable encryption: 'ssl' , 'tls' accepted
+            if (isset($options['encryption']) && $options['encryption']) {
+                $mail->SMTPSecure = $options['encryption']; // Enable encryption: 'ssl' , 'tls' accepted
             }
 
             // Extra smtp options
-            if (isset($this->options['smtp']) && is_array($this->options['smtp'])) {
-                $mail->SMTPOptions = $this->options['smtp'];
+            if (isset($options['smtp']) && is_array($options['smtp'])) {
+                $mail->SMTPOptions = $options['smtp'];
             }
         }
+
+        return $mail;
+    }
+
+    public function createMessage(mixed $to, string $subject, string $message, array $options=[]) {
+
+        $mail = $this->createMailer($options);
 
         $mail->Subject = $subject;
         $mail->Body    = $message;
@@ -119,6 +138,12 @@ class Mailer {
             }
         }
 
+        if (isset($options['headers']) && is_array($options['headers'])) {
+            foreach ($options['headers'] as $name => $value) {
+                $mail->addCustomHeader($name, $value);
+            }
+        }
+
         $msg = new Mailer_Message($mail);
 
         return $msg;
@@ -144,7 +169,7 @@ class Mailer_Message {
 
     public function setFrom(string $email, ?string $name = null): void {
         $this->mail->From = $email;
-        $this->mail->FromName = $name ? $name : $email;
+        $this->mail->FromName = $name ?: $email;
     }
 
     public function addReplyTo(string $email, string $name = ''): void {
@@ -165,5 +190,9 @@ class Mailer_Message {
 
     public function attach(mixed $file, string $alias = ''): mixed {
         return $this->mail->AddAttachment($file, $alias);
+    }
+
+    public function addCustomHeader(string $name, ?string $value = null): bool {
+        return $this->mail->addCustomHeader($name, $value);
     }
 }

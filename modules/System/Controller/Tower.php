@@ -18,12 +18,18 @@ class Tower extends App {
             return $this->stop(403);
         }
 
+        if ($this->app->retrieve('tower.disabled') === true) {
+            return $this->stop(403);
+        }
+
         $this->helper('session')->close();
     }
 
     public function index() {
 
-        return $this->render('system:views/tower.php');
+        $isAvailable = \function_exists('proc_open') && (new PhpExecutableFinder())->find();
+
+        return $this->render('system:views/tower.php', \compact('isAvailable'));
     }
 
 
@@ -31,32 +37,37 @@ class Tower extends App {
 
         $this->hasValidCsrfToken(true);
 
-        $command = trim($this->param('command', ''));
+        $command = \trim($this->param('command', ''));
 
         if (!$command) {
             return $this->stop(['error' => 'Command is missing'], 412);
         }
 
-        if (strpos($command, 'tower ') === 0) {
-            $command = substr($command, 6);
+        if (\str_starts_with($command, 'tower ')) {
+            $command = \substr($command, 6);
         }
 
-        $command = escapeshellcmd("tower {$command}");
         $phpBinaryPath = (new PhpExecutableFinder())->find();
 
-        $process = Process::fromShellCommandline("$phpBinaryPath {$command} -n");
+        if (!$phpBinaryPath) {
+            return $this->stop(['error' => 'PHP binary not found'], 500);
+        }
+
+        // Use Process array form to prevent shell injection.
+        // Array form calls proc_open() directly without /bin/sh -c,
+        // so shell metacharacters (backticks, $(), ;, |, &&) are not interpreted.
+        $args = \preg_split('/\s+/', $command, -1, PREG_SPLIT_NO_EMPTY);
+        $process = new Process([$phpBinaryPath, 'tower', ...$args, '-n']);
         $process->setPty(true);
         $process->run();
 
         $output = $process->getOutput();
 
-        //exec("$phpBinaryPath tower $command  2>&1", $output, $retval);
-
-        if (is_array($output)) {
-            $output = implode("\n\r", $output);
+        if (\is_array($output)) {
+            $output = \implode("\n\r", $output);
         }
 
-        return ['success' => true, 'output' => trim($output)];
+        return ['success' => true, 'output' => \trim($output)];
     }
 
 }
