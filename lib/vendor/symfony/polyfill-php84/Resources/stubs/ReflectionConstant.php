@@ -10,9 +10,13 @@
  */
 
 if (\PHP_VERSION_ID < 80400) {
+<<<<<<< HEAD
     /**
      * @author Daniel Scherzer <daniel.e.scherzer@gmail.com>
      */
+=======
+    // @author Daniel Scherzer <daniel.e.scherzer@gmail.com>
+>>>>>>> develop
     final class ReflectionConstant
     {
         /**
@@ -24,6 +28,10 @@ if (\PHP_VERSION_ID < 80400) {
 
         private $value;
         private $deprecated;
+<<<<<<< HEAD
+=======
+        private $persistent;
+>>>>>>> develop
 
         private static $persistentConstants = [];
 

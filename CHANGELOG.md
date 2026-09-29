@@ -1,19 +1,5 @@
 # Release Notes
 
-## 2.12.1 (2025-10-26)
-
-- Fix Identi module usage with spaces
-- Fix video preview in assets manager spotlight
-- Improve RedisLite and ESQL lib
-- Fix missing fixToHeight method for image api
-- Add image assets preset support
-- Fix nested _id filtering (mongodb)
-- Enhance field-object component to support strict JSON mode
-- Enhance field-boolean component with integer mode support
-- Update Uppy.js from v4 to v5
-- Fix missing _id on assets folder creation (mongodb)
-
-
 ## 2.12.0 (2025-08-01)
 
 - Trigger additional `app.user.logout.after` on user logout

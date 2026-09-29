@@ -9,7 +9,7 @@ class Users extends App {
     protected function before() {
 
         // is account view
-        if ($this->context['action'] == 'user' && !count($this->context['params'])) {
+        if ($this->context['action'] == 'user' && !\count($this->context['params'])) {
             return true;
         }
 
@@ -54,7 +54,7 @@ class Users extends App {
 
         $languages = $this->geti18n();
 
-        return $this->render('system:views/users/user.php', compact('user', 'isAccountView', 'languages'));
+        return $this->render('system:views/users/user.php', \compact('user', 'isAccountView', 'languages'));
     }
 
     public function create() {
@@ -72,7 +72,7 @@ class Users extends App {
         $isAccountView = false;
         $languages = $this->geti18n();
 
-        return $this->render('system:views/users/user.php', compact('user', 'isAccountView', 'languages'));
+        return $this->render('system:views/users/user.php', \compact('user', 'isAccountView', 'languages'));
     }
 
     public function save() {
@@ -92,21 +92,21 @@ class Users extends App {
             return $this->stop(['error' => 'User verification failed'], 412);
         }
 
-        // don't allow to change role if not allowed
-        if (isset($user['role']) && !$this->isAllowed('app/users/manage')) {
-            unset($user['role']);
+        // don't allow to change sensitive fields if user doesn't have permissions
+        if (!$this->isAllowed('app/users/manage')) {
+            unset($user['role'], $user['active']);
         }
 
-        $user['_modified'] = time();
+        $user['_modified'] = \time();
 
         if (!$isUpdate) {
 
             // new user needs a password
-            if (!isset($user['password']) || !trim($user['password'])) {
+            if (!isset($user['password']) || !\trim($user['password'])) {
                 return $this->stop(['error' => 'User password required'], 412);
             }
 
-            if (!isset($user['user']) || !trim($user['user'])) {
+            if (!isset($user['user']) || !\trim($user['user'])) {
                 return $this->stop(['error' => 'Username required'], 412);
             }
 
@@ -115,7 +115,7 @@ class Users extends App {
 
         if (isset($user['password'])) {
 
-            if (strlen($user['password'])){
+            if (\strlen($user['password'])){
                 $user['password'] = $this->app->hash($user['password']);
             } else {
                 unset($user['password']);
@@ -126,19 +126,33 @@ class Users extends App {
             return $this->stop(['error' => 'Valid email required'], 412);
         }
 
-        if (isset($user['user']) && !trim($user['user'])) {
+        if (isset($user['user']) && !\trim($user['user'])) {
             return $this->stop(['error' => 'Username cannot be empty!'], 412);
         }
 
-        if (isset($user['name']) && !trim($user['name'])) {
+        if (isset($user['name']) && !\trim($user['name'])) {
             return $this->stop(['error' => 'Name cannot be empty!'], 412);
         }
 
         foreach (['name', 'user', 'email'] as $key) {
-            $user[$key] = strip_tags(trim($user[$key]));
+            $user[$key] = \strip_tags(\trim($user[$key]));
         }
 
-        if (isset($user['_meta']) && (!is_array($user['_meta']) || array_is_list($user['_meta']))) {
+        // Prevent XSS via twofa.secret - never accept secret from client
+        if (isset($user['twofa'])) {
+
+            $enabled = !empty($user['twofa']['enabled']);
+            $secret = $this->helper('twfa')->createSecret(160);
+
+            if ($isUpdate) {
+                $existingUser = $this->app->dataStorage->findOne('system/users', ['_id' => $user['_id']]);
+                $secret = $existingUser['twofa']['secret'] ?? $secret;
+            }
+
+            $user['twofa'] = \compact('enabled', 'secret');
+        }
+
+        if (isset($user['_meta']) && (!\is_array($user['_meta']) || \array_is_list($user['_meta']))) {
             $user['_meta'] = new \ArrayObject([]);
         }
 
@@ -207,12 +221,12 @@ class Users extends App {
         $this->helper('session')->close();
         $this->hasValidCsrfToken(true);
 
-        $options = array_merge([
+        $options = \array_merge([
             'sort'   => ['user' => 1],
             'limit'  => 1
         ], $this->param('options', []));
 
-        if (isset($options['filter']) && $options['filter'] && is_string($options['filter'])) {
+        if (isset($options['filter']) && $options['filter'] && \is_string($options['filter'])) {
 
             $filter = null;
 
@@ -246,12 +260,12 @@ class Users extends App {
         }
 
         $users = $this->app->dataStorage->find('system/users', $options)->toArray();
-        $count = (!isset($options['skip']) && !isset($options['limit'])) ? count($users) : $this->app->dataStorage->count('system/users', isset($options['filter']) ? $options['filter'] : []);
-        $pages = isset($options['limit']) ? ceil($count / $options['limit']) : 1;
+        $count = (!isset($options['skip']) && !isset($options['limit'])) ? \count($users) : $this->app->dataStorage->count('system/users', isset($options['filter']) ? $options['filter'] : []);
+        $pages = isset($options['limit']) ? \ceil($count / $options['limit']) : 1;
         $page  = 1;
 
         if ($pages > 1 && isset($options['skip'])) {
-            $page = ceil($options['skip'] / $options['limit']) + 1;
+            $page = \ceil($options['skip'] / $options['limit']) + 1;
         }
 
         foreach ($users as &$user) {
@@ -262,7 +276,7 @@ class Users extends App {
             $this->app->trigger('app.user.disguise', [&$user]);
         }
 
-        return compact('users', 'count', 'pages', 'page');
+        return \compact('users', 'count', 'pages', 'page');
     }
 
     public function getSecretQRCode($secret = null, $size = 150) {
@@ -275,7 +289,7 @@ class Users extends App {
 
         $this->app->response->mime = 'svg';
 
-        return $this->helper('twfa')->getQRCodeImage($secret, intval($size));
+        return $this->helper('twfa')->getQRCodeImage($secret, \intval($size));
     }
 
     protected function geti18n() {
@@ -289,7 +303,7 @@ class Users extends App {
 
         foreach ($this->app->helper('fs')->ls($i18nFolder) as $dir) {
 
-            if (!$dir->isDir() || $dir->isDot() || !file_exists($dir->getRealPath().'/App.php')) {
+            if (!$dir->isDir() || $dir->isDot() || !\file_exists($dir->getRealPath().'/App.php')) {
                 continue;
             }
 

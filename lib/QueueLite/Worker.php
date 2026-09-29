@@ -13,13 +13,13 @@ class Worker {
         $this->queue = $queue;
 
         if (isset($options['maxExecutionTime'])) {
-            $this->maxExecutionTime = intval($options['maxExecutionTime']);
+            $this->maxExecutionTime = \intval($options['maxExecutionTime']);
         }
     }
 
-    public function process(callable $callback, $limit = 10) {
+    public function process(callable $callback, int $limit = 10): int {
 
-        $startTime = time();
+        $startTime = \time();
 
         $this->processedCount = 0;
         $this->queue->release();
@@ -27,7 +27,7 @@ class Worker {
         // Process messages until we hit the limit or run out of time
         while ($this->processedCount < $limit) {
             // Check if we're approaching the max execution time
-            if ((time() - $startTime) > $this->maxExecutionTime) {
+            if ((\time() - $startTime) > $this->maxExecutionTime) {
                 break;
             }
 
@@ -43,15 +43,15 @@ class Worker {
 
                 $context = new \ArrayObject([]);
 
-                $startTime = microtime(true);
-                $startMemory = memory_get_usage();
+                $jobStartTime = \microtime(true);
+                $jobStartMemory = \memory_get_usage();
 
                 // Process the message
-                $result = call_user_func($callback, $message, $context);
+                $result = \call_user_func($callback, $message, $context);
 
                 $context['_stats'] = [
-                    'memory' => memory_get_usage() - $startMemory,
-                    'duration' => microtime(true) - $startTime,
+                    'memory' => \memory_get_usage() - $jobStartMemory,
+                    'duration' => \microtime(true) - $jobStartTime,
                 ];
 
                 $context = $context->getArrayCopy();
@@ -59,17 +59,23 @@ class Worker {
                 // Mark the message as completed if the callback returned true
                 if ($result === true) {
 
-                    $this->queue->complete($message['_id'], $context);
+                    $this->queue->complete($message['_id'], [
+                        '__reservation_token' => $message['reservation_token'] ?? null,
+                    ] + $context);
                 } else {
                     // Otherwise mark it as failed
-                    $this->queue->fail($message['_id'], $context);
+                    $this->queue->fail($message['_id'], [
+                        '__reservation_token' => $message['reservation_token'] ?? null,
+                    ] + $context);
                 }
 
                 $this->processedCount++;
 
-            } catch (\Exception $e) {
+            } catch (\Throwable $e) {
                 // If an exception was thrown, mark the message as failed
-                $this->queue->fail($message['_id']);
+                $this->queue->fail($message['_id'], [
+                    '__reservation_token' => $message['reservation_token'] ?? null,
+                ]);
             }
         }
 

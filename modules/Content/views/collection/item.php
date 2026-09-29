@@ -22,19 +22,19 @@ if (count($locales) == 1) {
 
             <div class="kiss-flex kiss-flex-middle">
 
-                <div class="kiss-margin-small-right">
+                <div class="kiss-margin-small-end">
                     <kiss-svg class="kiss-margin-auto" src="<?= $this->base(isset($model['icon']) && $model['icon'] ? $model['icon'] : 'content:assets/icons/collection.svg') ?>" width="30" height="30" style="color:<?= ($this->escape($model['color'] ?? 'inherit')) ?>"><canvas width="30" height="30"></canvas></kiss-svg>
                 </div>
-                <a class="kiss-color-muted kiss-margin-small-right" onclick="VueView.ui.offcanvas('content:assets/dialogs/switch-model-view.js')">
+                <a class="kiss-color-muted kiss-margin-small-end" onclick="VueView.ui.offcanvas('content:assets/dialogs/switch-model-view.js')">
                     <icon>expand_circle_down</icon>
                 </a>
-                <div class="kiss-margin-small-right">
+                <div class="kiss-margin-small-end">
                     <a class="kiss-link-muted kiss-size-4 kiss-text-bold" href="<?=$this->route("/content/collection/items/{$model['name']}")?>"><?= $this->escape($model['label'] ? $model['label'] : $model['name']) ?></a>
                 </div>
-                <span class="kiss-badge kiss-badge-outline kiss-color-primary kiss-margin-small-right" v-if="!item._id">
+                <span class="kiss-badge kiss-badge-outline kiss-color-primary kiss-margin-small-end" v-if="!item._id">
                     <?=t('New Item')?>
                 </span>
-                <a class="kiss-size-large kiss-margin-small-right" href kiss-popout="#model-item-menu-actions"><icon>more_horiz</icon></a>
+                <a class="kiss-size-large kiss-margin-small-end" href kiss-popout="#model-item-menu-actions"><icon>more_horiz</icon></a>
             </div>
         </kiss-container>
 
@@ -63,7 +63,7 @@ if (count($locales) == 1) {
 
                             <div class="kiss-margin-xsmall">
                                 <div class="kiss-flex kiss-flex-middle">
-                                    <div class="kiss-size-4 kiss-margin-small-right kiss-flex" title="ID"><icon>adjust</icon></div>
+                                    <div class="kiss-size-4 kiss-margin-small-end kiss-flex" title="ID"><icon>adjust</icon></div>
                                     <div class="kiss-text-truncate kiss-text-bold kiss-text-monospace kiss-size-small kiss-flex-1">{{ item._id }}</div>
                                     <a :title="t('Copy')" @click="copyID()"><icon>content_copy</icon></a>
                                 </div>
@@ -71,7 +71,7 @@ if (count($locales) == 1) {
 
                             <div class="kiss-margin-xsmall">
                                 <div class="kiss-flex kiss-flex-middle">
-                                    <div class="kiss-size-4 kiss-margin-small-right kiss-flex kiss-color-muted" :title="t('Created at')"><icon>more_time</icon></div>
+                                    <div class="kiss-size-4 kiss-margin-small-end kiss-flex kiss-color-muted" :title="t('Created at')"><icon>more_time</icon></div>
                                     <div class="kiss-text-truncate kiss-size-small kiss-text-monospace kiss-color-muted kiss-flex-1"><app-datetime :datetime="item._created" /></div>
                                     <user-info :user-id="item._cby"></user-info>
                                 </div>
@@ -79,7 +79,7 @@ if (count($locales) == 1) {
 
                             <div class="kiss-margin-xsmall" v-if="item._created != item._modified">
                                 <div class="kiss-flex kiss-flex-middle">
-                                    <div class="kiss-size-4 kiss-margin-small-right kiss-flex kiss-color-muted" :title="t('Modified at')"><icon>history</icon></div>
+                                    <div class="kiss-size-4 kiss-margin-small-end kiss-flex kiss-color-muted" :title="t('Modified at')"><icon>history</icon></div>
                                     <div class="kiss-text-truncate kiss-size-small kiss-text-monospace kiss-color-muted kiss-flex-1"><app-datetime :datetime="item._modified" /></div>
                                     <user-info :user-id="item._mby"></user-info>
                                 </div>
@@ -110,14 +110,18 @@ if (count($locales) == 1) {
                         <div class="kiss-text-caption kiss-size-xsmall kiss-text-bold">{{ t('Translation') }}</div>
 
                         <kiss-card class="kiss-padding-small kiss-margin-small kiss-text-muted kiss-size-small kiss-color-muted kiss-flex kiss-flex-middle" theme="bordered" v-if="!locales.length">
-                            <span class="kiss-flex-1 kiss-margin-small-right">{{ t('No locales.') }}</span>
+                            <span class="kiss-flex-1 kiss-margin-small-end">{{ t('No locales.') }}</span>
                             <a class="kiss-size-xsmall  kiss-text-bolder" href="<?=$this->route('/system/locales')?>">{{ t('Manage') }}</a>
                         </kiss-card>
 
                         <div class="kiss-margin-small" v-if="locales.length">
 
                             <kiss-card class="kiss-position-relative kiss-padding-small kiss-margin-xsmall kiss-text-bolder kiss-flex kiss-flex-middle" :class="{'kiss-color-muted': !loc.visible}" :theme="!loc.visible ? 'bordered':'bordered contrast'" v-for="loc in locales">
+<<<<<<< HEAD
                                 <icon class="kiss-margin-small-right" :class="{'kiss-color-primary': loc.visible}">{{ loc.visible ? 'visibility' : 'visibility_off' }}</icon>
+=======
+                                <icon class="kiss-margin-small-end" :class="{'kiss-color-primary': loc.visible}">{{ loc.visible ? 'visibility' : 'visibility_off' }}</icon>
+>>>>>>> develop
                                 <span class="kiss-size-small kiss-flex-1">{{ loc.name }}</span>
                                 <span class="kiss-color-muted kiss-size-xsmall" v-if="loc.i18n == 'default'">{{ t('Default') }}</span>
                                 <a class="kiss-cover" @click="loc.visible = !loc.visible"></a>
@@ -186,19 +190,19 @@ if (count($locales) == 1) {
                     <ul class="app-list-items kiss-margin-small-top">
                         <li>
                             <a class="kiss-flex kiss-flex-middle" :class="{'kiss-color-muted': item._state != 1, 'kiss-text-bold': item._state == 1}" @click="item._state=1">
-                                <icon class="kiss-margin-small-right">{{ item._state != 1 ? 'radio_button_unchecked' : 'radio_button_checked'}}</icon>
+                                <icon class="kiss-margin-small-end">{{ item._state != 1 ? 'radio_button_unchecked' : 'radio_button_checked'}}</icon>
                                 <?=t('Published')?>
                             </a>
                         </li>
                         <li>
                             <a class="kiss-flex kiss-flex-middle" :class="{'kiss-color-muted': item._state != 0, 'kiss-text-bold': item._state == 0}" @click="item._state=0">
-                                <icon class="kiss-margin-small-right">{{ item._state != 0 ? 'radio_button_unchecked' : 'radio_button_checked'}}</icon>
+                                <icon class="kiss-margin-small-end">{{ item._state != 0 ? 'radio_button_unchecked' : 'radio_button_checked'}}</icon>
                                 <?=t('Unpublished')?>
                             </a>
                         </li>
                         <li v-if="item._id">
                             <a class="kiss-flex kiss-flex-middle" :class="{'kiss-color-muted': item._state != -1, 'kiss-text-bold': item._state == -1}" @click="item._state=-1">
-                                <icon class="kiss-margin-small-right">{{ item._state != -1 ? 'radio_button_unchecked' : 'radio_button_checked'}}</icon>
+                                <icon class="kiss-margin-small-end">{{ item._state != -1 ? 'radio_button_unchecked' : 'radio_button_checked'}}</icon>
                                 <?=t('Archive')?>
                             </a>
                         </li>
@@ -215,26 +219,26 @@ if (count($locales) == 1) {
                         <li class="kiss-nav-header"><?=t('Actions')?></li>
                         <li>
                             <a class="kiss-flex kiss-flex-middle" href @click.prevent="showJSON()">
-                                <icon class="kiss-margin-small-right">manage_search</icon>
+                                <icon class="kiss-margin-small-end">manage_search</icon>
                                 <?=t('JSON Object')?>
                             </a>
                         </li>
                         <li v-if="item._id">
                             <a class="kiss-flex kiss-flex-middle" :href="$routeUrl(`/content/collection/item/${model.name}`)">
-                                <icon class="kiss-margin-small-right">add_circle</icon>
+                                <icon class="kiss-margin-small-end">add_circle</icon>
                                 <?=t('Create new item')?>
                             </a>
                         </li>
                         <li v-if="item._id">
                             <a class="kiss-flex kiss-flex-middle" :href="$routeUrl(`/content/collection/clone/${model.name}/${item._id}`)">
-                                <icon class="kiss-margin-small-right">control_point_duplicate</icon>
+                                <icon class="kiss-margin-small-end">control_point_duplicate</icon>
                                 <?=t('Clone item')?>
                             </a>
                         </li>
                         <li class="kiss-nav-divider"></li>
                         <li>
                             <a class="kiss-flex kiss-flex-middle" href="<?=$this->route("/content/models/edit/{$model['name']}")?>">
-                                <icon class="kiss-margin-small-right">create</icon>
+                                <icon class="kiss-margin-small-end">create</icon>
                                 <?=t('Edit model')?>
                             </a>
                         </li>
@@ -250,7 +254,7 @@ if (count($locales) == 1) {
                         <li class="kiss-nav-header"><?=t('Open preview')?></li>
                         <li v-for="preview in model.preview">
                             <a class="kiss-flex kiss-flex-middle" @click="showPreviewUri(preview.uri)">
-                                <icon class="kiss-margin-small-right">travel_explore</icon>
+                                <icon class="kiss-margin-small-end">travel_explore</icon>
                                 {{ preview.name }}
                             </a>
                         </li>
@@ -263,23 +267,23 @@ if (count($locales) == 1) {
 
     <script type="module">
 
+        import {useDirtyCheck} from "module-app/assets/vue-components/dirty-check.js";
+
         export default {
+
+            mixins: [useDirtyCheck('item')],
+
             data() {
                 return {
                     model: <?=json_encode($model)?>,
                     item: <?=json_encode($item)?>,
                     fields: <?=json_encode($fields)?>,
                     locales: <?=json_encode($locales)?>,
-                    saving: false,
-                    savedItemState: null
+                    saving: false
                 }
             },
 
             computed: {
-
-                isModified() {
-                    return JSON.stringify(this.item) != this.savedItemState;
-                },
 
                 hasLocales() {
 
@@ -288,22 +292,6 @@ if (count($locales) == 1) {
                     }
                     return false;
                 }
-            },
-
-            mounted() {
-
-                setTimeout(() => {
-
-                    this.savedItemState = JSON.stringify(this.item);
-
-                    window.onbeforeunload = e => {
-
-                        if (this.isModified) {
-                            e.preventDefault();
-                            e.returnValue = this.t('You have unsaved data! Are you sure you want to leave?');
-                        }
-                    };
-                }, 1500);
             },
 
             methods: {
@@ -325,7 +313,7 @@ if (count($locales) == 1) {
                     this.$request(`/content/models/saveItem/${model}`, {item: this.item}).then(item => {
 
                         this.item = Object.assign(this.item, item);
-                        setTimeout(() => this.savedItemState = JSON.stringify(this.item), 20);
+                        this.resetDirtyState();
                         this.saving = false;
                         App.ui.notify('Data updated!');
 

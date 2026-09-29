@@ -7,6 +7,11 @@ use Firebase\JWT\Key;
 
 class JWT extends \Lime\Helper {
 
+<<<<<<< HEAD
+=======
+    protected string $algo = 'HS256';
+
+>>>>>>> develop
     /**
      * Create a JWT token with the given payload and key.
      *
@@ -15,7 +20,7 @@ class JWT extends \Lime\Helper {
      * @return string The encoded JWT token.
      */
     public function create(array $payload, ?string $key = null) {
-        return JWTLIB::encode($payload, $key ?? $this->app->retrieve('sec-key'), 'HS256');
+        return JWTLIB::encode($payload, $this->key($key), $this->algo);
     }
 
     /**
@@ -37,6 +42,20 @@ class JWT extends \Lime\Helper {
      * @return object|null The decoded payload or null if invalid.
      */
     public function decode(string $token, ?string $key = null) {
-        return JWTLIB::decode($token, new Key($key ?? $this->app->retrieve('sec-key'), 'HS256'));
+        return JWTLIB::decode($token, new Key($this->key($key), $this->algo));
     }
+<<<<<<< HEAD
+=======
+
+    protected function key(?string $key = null): string {
+
+        $key = (string)($key ?? $this->app->retrieve('sec-key'));
+
+        if (\strlen($key) < 32) {
+            throw new \DomainException('JWT HS256 key must be at least 32 bytes');
+        }
+
+        return $key;
+    }
+>>>>>>> develop
 }

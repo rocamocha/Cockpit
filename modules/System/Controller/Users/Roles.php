@@ -33,8 +33,9 @@ class Roles extends App {
         $this->checkAndLockResource($id);
 
         $role['permissions'] = new ArrayObject($role['permissions']);
+        $role['expressions'] = new ArrayObject($role['expressions'] ?? []);
 
-        return $this->render('system:views/users/roles/role.php', compact('role'));
+        return $this->render('system:views/users/roles/role.php', \compact('role'));
     }
 
     public function create() {
@@ -43,10 +44,11 @@ class Roles extends App {
             'appid' => '',
             'name'  => '',
             'info'  => '',
-            'permissions' => new ArrayObject([])
+            'permissions' => new ArrayObject([]),
+            'expressions' => new ArrayObject([])
         ];
 
-        return $this->render('system:views/users/roles/role.php', compact('role'));
+        return $this->render('system:views/users/roles/role.php', \compact('role'));
     }
 
     public function remove() {
@@ -79,7 +81,7 @@ class Roles extends App {
             return $this->stop(['error' => 'Role data is missing'], 412);
         }
 
-        $role['_modified'] = time();
+        $role['_modified'] = \time();
         $isUpdate = isset($role['_id']);
 
         if (!$isUpdate) {
@@ -87,12 +89,12 @@ class Roles extends App {
             $role['_created'] = $role['_modified'];
         }
 
-        if (!isset($role['appid']) || !trim($role['appid'])) {
+        if (!isset($role['appid']) || !\trim($role['appid'])) {
             return $this->stop(['error' => 'appid required'], 412);
         }
 
         foreach (['appid', 'name', 'info'] as $key) {
-            $role[$key] = strip_tags(trim($role[$key]));
+            $role[$key] = \strip_tags(\trim($role[$key]));
         }
 
         // unique check
@@ -118,13 +120,40 @@ class Roles extends App {
             $role['permissions'] = [];
         }
 
+        // cleanup expressions
+        if (isset($role['expressions']) && \is_array($role['expressions'])) {
+
+            foreach ($role['expressions'] as $key => &$entry) {
+
+                if (!\is_array($entry) || empty(\trim((string)($entry['expr'] ?? '')))) {
+                    unset($role['expressions'][$key]);
+                    continue;
+                }
+
+                if (empty($role['permissions'][$key])) {
+                    unset($role['expressions'][$key]);
+                    continue;
+                }
+
+                // strip empty msg
+                if (isset($entry['msg']) && !\trim((string)$entry['msg'])) {
+                    unset($entry['msg']);
+                }
+            }
+
+            unset($entry);
+
+        } else {
+            $role['expressions'] = [];
+        }
 
         $this->app->trigger('app.roles.save', [&$role, $isUpdate]);
         $this->app->dataStorage->save('system/roles', $role);
 
         $role = $this->app->dataStorage->findOne('system/roles', ['_id' => $role['_id']]);
 
-        $role['permissions'] = new ArrayObject( $role['permissions']);
+        $role['permissions'] = new ArrayObject($role['permissions']);
+        $role['expressions'] = new ArrayObject($role['expressions'] ?? []);
 
         $this->cache();
 

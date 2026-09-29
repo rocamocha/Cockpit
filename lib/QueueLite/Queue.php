@@ -7,14 +7,16 @@ use \MongoHybrid\Client as MongoHybridClient;
 
 class Queue {
 
-    protected $storage;
-    protected $queueName;
-    protected $options;
+    protected MongoHybridClient $storage;
+    protected string $queueName;
+    protected array $options;
 
-    protected $lockTimeout = 300;
-    protected $collectionName = 'queuelite/queue';
+    protected int $lockTimeout = 300;
+    protected string $collectionName = 'queuelite/queue';
 
-    public function __construct(MongoHybridClient $storage, string $queueName, $options = []) {
+    protected string $reservationTokenKey = '__reservation_token';
+
+    public function __construct(MongoHybridClient $storage, string $queueName, array $options = []) {
 
         $this->storage = $storage;
         $this->queueName = $queueName;
@@ -29,9 +31,9 @@ class Queue {
         }
     }
 
-    public function push(array $data, array $options = []) {
+    public function push(array $data, array $options = []): array {
 
-        $options = array_merge([
+        $options = \array_merge([
             'delay' => 0,
             'priority' => 0,
             'maxAttempts' => 1,
@@ -50,12 +52,12 @@ class Queue {
             ]);
         }
 
-        $timestamp = time();
+        $timestamp = \time();
         $availableAt = $timestamp + $delay;
 
         if (isset($options['repeat'])) {
 
-            if (is_string($repeat)) {
+            if (\is_string($repeat)) {
                 $repeat = [
                     'interval' => $repeat,
                     'count' => null,
@@ -63,16 +65,16 @@ class Queue {
                 ];
             }
 
-            if (is_array($repeat)) {
+            if (\is_array($repeat)) {
 
-                $repeat = array_merge([
+                $repeat = \array_merge([
                     'count' => null,
                     'interval' => null,
                     'until' => null
                 ], $repeat);
 
-                if (is_string($repeat['until'])) {
-                    $repeat['until'] = strtotime($repeat['until'], $availableAt);
+                if (\is_string($repeat['until'])) {
+                    $repeat['until'] = \strtotime($repeat['until'], $availableAt);
                 }
 
                 if (isset($repeat['interval'])) {
@@ -93,7 +95,7 @@ class Queue {
             'priority' => $priority,
             'status' => 'pending',
             'attempts' => 0,
-            'max_attempts' => abs($maxAttempts),
+            'max_attempts' => \abs($maxAttempts),
             'uid' => $uid,
         ];
 
@@ -106,14 +108,70 @@ class Queue {
         return $message;
     }
 
-    protected function scheduleNextRepeatableMessage(array $message) {
+    protected function createReservationToken(): string {
+
+        try {
+            return \bin2hex(\random_bytes(16));
+        } catch (\Throwable) {
+            return \uniqid('ql.', true);
+        }
+    }
+
+    protected function updateMatchedAny(mixed $result): bool {
+
+        if (\is_int($result)) {
+            return $result > 0;
+        }
+
+        if (\is_object($result)) {
+
+            if (\method_exists($result, 'getMatchedCount')) {
+                return $result->getMatchedCount() > 0;
+            }
+
+            if (\method_exists($result, 'getModifiedCount')) {
+                return $result->getModifiedCount() > 0;
+            }
+        }
+
+        return (bool) $result;
+    }
+
+    protected function reservationFilter(string $messageId, ?string $reservationToken = null): array {
+
+        $filter = [
+            '_id' => $messageId,
+            'queue' => $this->queueName,
+            'status' => 'reserved'
+        ];
+
+        if ($reservationToken !== null) {
+            $filter['reservation_token'] = $reservationToken;
+        }
+
+        return $filter;
+    }
+
+    protected function consumeReservationToken(array &$data): ?string {
+
+        $token = null;
+
+        if (\array_key_exists($this->reservationTokenKey, $data)) {
+            $token = \is_string($data[$this->reservationTokenKey]) ? $data[$this->reservationTokenKey] : null;
+            unset($data[$this->reservationTokenKey]);
+        }
+
+        return $token;
+    }
+
+    protected function scheduleNextRepeatableMessage(array $message): void {
 
         if (!isset($message['repeat'])) {
             return;
         }
 
         $repeat = $message['repeat'];
-        $currentTimestamp = time();
+        $currentTimestamp = \time();
 
         if (!empty($repeat['until']) && $repeat['until'] < $currentTimestamp) {
             return;
@@ -134,31 +192,31 @@ class Queue {
         ]);
     }
 
-    protected function calculateNextRepeatableInterval(string $interval, int $currentTimestamp) {
+    protected function calculateNextRepeatableInterval(string $interval, int $currentTimestamp): int {
 
-        $interval = trim($interval);
+        $interval = \trim($interval);
 
         // Check if the interval is a time of day (contains am/pm or is in 24h format like 15:00)
         if (
-            preg_match('/^(1[0-2]|0?[1-9])(?::([0-5][0-9]))?([ap]m)$/i', $interval) ||
-            preg_match('/^([01]?[0-9]|2[0-3]):([0-5][0-9])$/', $interval)
+            \preg_match('/^(1[0-2]|0?[1-9])(?::([0-5][0-9]))?([ap]m)$/i', $interval) ||
+            \preg_match('/^([01]?[0-9]|2[0-3]):([0-5][0-9])$/', $interval)
         ) {
             // It's a time of day - calculate the next occurrence
             $dt = new \DateTime('@' . $currentTimestamp);
-            $dt->setTimezone(new \DateTimeZone(date_default_timezone_get()));
+            $dt->setTimezone(new \DateTimeZone(\date_default_timezone_get()));
             $today = $dt->format('Y-m-d');
 
             // Try to parse the time for today
-            $todayWithTime = strtotime($today . ' ' . $interval);
+            $todayWithTime = \strtotime($today . ' ' . $interval);
 
             if ($todayWithTime > $currentTimestamp) {
                 // If today's occurrence is in the future, use it
                 return $todayWithTime;
             } else {
                 // Otherwise, use tomorrow's occurrence
-                $tomorrow = strtotime('+1 day', strtotime($today));
-                $tomorrowFormatted = date('Y-m-d', $tomorrow);
-                return strtotime($tomorrowFormatted . ' ' . $interval);
+                $tomorrow = \strtotime('+1 day', \strtotime($today));
+                $tomorrowFormatted = \date('Y-m-d', $tomorrow);
+                return \strtotime($tomorrowFormatted . ' ' . $interval);
             }
         }
 
@@ -174,68 +232,105 @@ class Queue {
         $interval = $mappings[$interval] ?? $interval;
 
         // Use PHP's strtotime for calculation
-        $nextTime = strtotime("+{$interval}", $currentTimestamp);
+        $nextTime = \strtotime("+{$interval}", $currentTimestamp);
 
         return $nextTime !== false ? $nextTime : $currentTimestamp + 86400; // Default to 1 day if parsing fails
     }
 
-    public function reserve() {
+    public function reserve(): ?array {
 
-        $message = $this->storage->find($this->collectionName, [
-            'limit' => 1,
-            'sort' => ['priority' => -1, 'available_at' => 1],
-            'filter' => [
-                'queue' => $this->queueName,
-                'status' => 'pending',
-                'available_at' => ['$lte' => time()],
-            ]
-        ])[0] ?? null;
+        for ($retry = 0; $retry < 5; $retry++) {
 
-        if (!$message) {
-            return null;
+            $timestamp = \time();
+
+            $candidates = $this->storage->find($this->collectionName, [
+                'limit' => 10,
+                'sort' => ['priority' => -1, 'available_at' => 1],
+                'filter' => [
+                    'queue' => $this->queueName,
+                    'status' => 'pending',
+                    'available_at' => ['$lte' => $timestamp],
+                ]
+            ])->toArray();
+
+            if (!$candidates) {
+                return null;
+            }
+
+            foreach ($candidates as $message) {
+
+                $reservationToken = $this->createReservationToken();
+                $attempts = ($message['attempts'] ?? 0) + 1;
+
+                $updated = $this->storage->update($this->collectionName, [
+                    '_id' => $message['_id'],
+                    'queue' => $this->queueName,
+                    'status' => 'pending',
+                    'attempts' => $message['attempts'] ?? 0,
+                    'available_at' => ['$lte' => $timestamp],
+                ], [
+                    'attempts' => $attempts,
+                    'status' => 'reserved',
+                    'reserved_at' => $timestamp,
+                    'reservation_token' => $reservationToken,
+                ]);
+
+                if (!$this->updateMatchedAny($updated)) {
+                    continue;
+                }
+
+                return $this->storage->findOne($this->collectionName, [
+                    '_id' => $message['_id'],
+                    'queue' => $this->queueName,
+                    'status' => 'reserved',
+                    'reservation_token' => $reservationToken,
+                ]);
+            }
         }
 
-        $message['attempts'] = ($message['attempts'] ?? 0) + 1;
-        $message['status'] = 'reserved';
-        $message['reserved_at'] = time();
-
-        $this->storage->save($this->collectionName, $message);
-
-        return $message;
+        return null;
     }
 
-    public function complete(string $messageId, $data = []) {
+    public function complete(string $messageId, array $data = []): bool {
 
-        $message = $this->storage->findOne($this->collectionName, ['_id' => $messageId, 'status' => 'reserved']);
+        $reservationToken = $this->consumeReservationToken($data);
+        $message = $this->storage->findOne($this->collectionName, $this->reservationFilter($messageId, $reservationToken));
 
         if (!$message) {
             return false;
         }
 
-        $message = array_merge($message, $data);
+        $message = \array_merge($message, $data);
 
         $message['status'] = 'completed';
-        $message['completed_at'] = time();
+        $message['completed_at'] = \time();
+        $message['reserved_at'] = null;
+        $message['reservation_token'] = null;
 
         $this->storage->save($this->collectionName, $message);
 
         if (isset($message['repeat'])) {
             $this->scheduleNextRepeatableMessage($message);
         }
+
+        return true;
     }
 
-    public function fail(string $messageId, $data = []) {
+    public function fail(string $messageId, array $data = []): bool {
 
-        $message = $this->storage->findOne($this->collectionName, ['_id' => $messageId, 'status' => 'reserved']);
+        $reservationToken = $this->consumeReservationToken($data);
+        $message = $this->storage->findOne($this->collectionName, $this->reservationFilter($messageId, $reservationToken));
 
         if (!$message) {
             return false;
         }
 
-        $message = array_merge($message, $data);
+        $message = \array_merge($message, $data);
 
-        $message['status'] = (($message['attempts'] + 1) > $message['max_attempts']) ? 'failed' : 'pending';
+        $message['status'] = (($message['attempts'] ?? 0) >= ($message['max_attempts'] ?? 1)) ? 'failed' : 'pending';
         $message['reserved_at'] = null;
+        $message['reservation_token'] = null;
+        $message['failed_at'] = $message['status'] === 'failed' ? \time() : null;
 
         $this->storage->save($this->collectionName, $message);
 
@@ -248,11 +343,12 @@ class Queue {
             }
         }
 
+        return true;
     }
 
-    public function release() {
+    public function release(): void {
 
-        $timestamp = time();
+        $timestamp = \time();
         $lockExpiry = $timestamp - $this->lockTimeout;
 
         $this->storage->update($this->collectionName,[
@@ -262,17 +358,14 @@ class Queue {
         ], [
             'status' => 'pending',
             'reserved_at' => null,
+            'reservation_token' => null,
         ]);
     }
 
-    public function delete($ids) {
+    public function delete(string|array $ids): void {
 
-        if (is_string($ids)) {
+        if (\is_string($ids)) {
             $ids = [$ids];
-        }
-
-        if (!is_array($ids)) {
-            return false;
         }
 
         $this->storage->remove($this->collectionName, [
@@ -281,9 +374,9 @@ class Queue {
         ]);
     }
 
-    public function messages(array $options = []) {
+    public function messages(array $options = []): array {
 
-        $options = array_merge([
+        $options = \array_merge([
             'status' => $options['status'] ?? null,
             'limit' => 10,
             'skip' => 0,
@@ -298,8 +391,8 @@ class Queue {
             $filter['status'] = $options['status'];
         }
 
-        if (isset($options['filter']) && is_array($options['filter'])) {
-            $filter = array_merge($options['filter'], $filter);
+        if (isset($options['filter']) && \is_array($options['filter'])) {
+            $filter = \array_merge($options['filter'], $filter);
         }
 
         return $this->storage->find($this->collectionName, [
@@ -310,7 +403,7 @@ class Queue {
         ])->toArray();
     }
 
-    public function count(?string $status = null) {
+    public function count(?string $status = null): int|array {
 
         $filter = [
             'queue' => $this->queueName,
@@ -334,8 +427,24 @@ class Queue {
 
     public function cleanup(string $status, int $olderThan = 86400): void {
 
-        $timestamp = time();
-        $cutoff = $timestamp - abs($olderThan);
+        $timestamp = \time();
+        $cutoff = $timestamp - \abs($olderThan);
+        $timestampField = match ($status) {
+            'completed' => 'completed_at',
+            'failed' => 'failed_at',
+            default => 'created_at',
+        };
+
+        if ($timestampField === 'created_at') {
+
+            $this->storage->remove($this->collectionName, [
+                'queue' => $this->queueName,
+                'status' => $status,
+                'created_at' => ['$lte' => $cutoff]
+            ]);
+
+            return;
+        }
 
         $filter = [
             'queue' => $this->queueName,
@@ -343,7 +452,18 @@ class Queue {
             'created_at' => ['$lte' => $cutoff]
         ];
 
-        $this->storage->remove($this->collectionName, $filter);
+        $ids = [];
+
+        foreach ($this->storage->find($this->collectionName, ['filter' => $filter])->toArray() as $message) {
+
+            if (($message[$timestampField] ?? null) === null || $message[$timestampField] <= $cutoff) {
+                $ids[] = $message['_id'];
+            }
+        }
+
+        if ($ids) {
+            $this->delete($ids);
+        }
     }
 
     public function purge(): void {

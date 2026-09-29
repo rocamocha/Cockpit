@@ -234,7 +234,7 @@ export let FieldRenderer = {
                 </vue-draggable>
 
                 <div class="kiss-margin-small">
-                    <button type="button" class="kiss-button kiss-button-small" @click="addFieldItem(field)"><icon class="kiss-margin-small-right">control_point</icon> {{ t('Add item') }}</button>
+                    <button type="button" class="kiss-button kiss-button-small" @click="addFieldItem(field)"><icon class="kiss-margin-small-end">control_point</icon> {{ t('Add item') }}</button>
                 </div>
             </div>
         </div>
@@ -247,12 +247,20 @@ export let FieldRenderer = {
                         <div>
                             <kiss-svg class="kiss-color-primary" :src="$baseUrl(fieldItem.meta.icon || 'system:assets/icons/edit.svg')" width="50" height="50"></kiss-svg>
                         </div>
+<<<<<<< HEAD
                         <div class="kiss-flex-1 kiss-margin-left">
+=======
+                        <div class="kiss-flex-1 kiss-margin-start">
+>>>>>>> develop
                             <span class="kiss-size-xsmall kiss-color-muted kiss-text-upper">{{ t(fieldItem.field.type) }}</span>
                             <kiss-row class="kiss-flex-middle">
                                 <div class="kiss-size-4 kiss-flex-1">
                                     <strong class="kiss-text-capitalize">{{ t(field.label || field.name) }}</strong>
+<<<<<<< HEAD
                                     <span class="kiss-color-muted kiss-text-light kiss-margin-small-left">{{ fieldItem.create ? t('Add item'):t('Update item') }}</span>
+=======
+                                    <span class="kiss-color-muted kiss-text-light kiss-margin-small-start">{{ fieldItem.create ? t('Add item'):t('Update item') }}</span>
+>>>>>>> develop
                                 </div>
                             </kiss-row>
                         </div>
@@ -283,33 +291,33 @@ export let FieldRenderer = {
                             <li class="kiss-nav-header">{{ field.label || field.name }} - Item</li>
                             <li>
                                 <a class="kiss-flex kiss-flex-middle" @click="editFieldItem(field, val.indexOf(actionItem))">
-                                    <icon class="kiss-margin-small-right">create</icon>
+                                    <icon class="kiss-margin-small-end">create</icon>
                                     {{ t('Edit') }}
                                 </a>
                             </li>
                             <li>
                                 <a class="kiss-flex kiss-flex-middle" @click="cloneFieldItem(val, val.indexOf(actionItem))">
-                                    <icon class="kiss-margin-small-right">control_point_duplicate</icon>
+                                    <icon class="kiss-margin-small-end">control_point_duplicate</icon>
                                     {{ t('Clone') }}
                                 </a>
                             </li>
                             <li class="kiss-nav-divider" v-if="val.length > 1"></li>
                             <li v-if="val.indexOf(actionItem) !== 0">
                                 <a class="kiss-flex kiss-flex-middle" @click="val.unshift(val.splice(val.indexOf(actionItem), 1)[0])">
-                                    <icon class="kiss-margin-small-right">arrow_upward</icon>
+                                    <icon class="kiss-margin-small-end">arrow_upward</icon>
                                     {{ t('Move first') }}
                                 </a>
                             </li>
                             <li v-if="val.indexOf(actionItem) !== val.length - 1">
                                 <a class="kiss-flex kiss-flex-middle" @click="val.push(val.splice(val.indexOf(actionItem), 1)[0])">
-                                    <icon class="kiss-margin-small-right">arrow_downward</icon>
+                                    <icon class="kiss-margin-small-end">arrow_downward</icon>
                                     {{ t('Move last') }}
                                 </a>
                             </li>
                             <li class="kiss-nav-divider"></li>
                             <li>
                                 <a class="kiss-color-danger kiss-flex kiss-flex-middle" @click="removeFieldItem(val, val.indexOf(actionItem))">
-                                    <icon class="kiss-margin-small-right">delete</icon>
+                                    <icon class="kiss-margin-small-end">delete</icon>
                                     {{ t('Delete') }}
                                 </a>
                             </li>
@@ -361,7 +369,7 @@ export default {
 
     mounted() {
 
-        App.on('fields-renderer-validate', evt => {
+        this._validateHandler = evt => {
 
             if (!evt.params.root.contains(this.$el)) {
                 return;
@@ -394,7 +402,9 @@ export default {
             if (errors.length) {
                 evt.params.errors = errors;
             }
-        });
+        };
+
+        App.on('fields-renderer-validate', this._validateHandler);
 
         // watch outline links on scroll
         if (this.outline) {
@@ -405,6 +415,15 @@ export default {
                 window.addEventListener('scroll', this.updateOutline);
                 this.updateOutline();
             }, 500);
+        }
+    },
+
+    beforeUnmount() {
+        if (this._validateHandler) {
+            App.off('fields-renderer-validate', this._validateHandler);
+        }
+        if (this.outline) {
+            window.removeEventListener('scroll', this.updateOutline);
         }
     },
 
@@ -555,7 +574,7 @@ export default {
         <div class="fields-renderer" :nested="nested">
 
             <kiss-card class="kiss-padding-small kiss-overlay-input kiss-flex kiss-flex-middle kiss-width-1-3@m kiss-margin" theme="bordered contrast" v-if="groups.length">
-                <div class="kiss-margin-small-right">
+                <div class="kiss-margin-small-end">
                     <icon class="kiss-size-1" :class="{'kiss-color-muted': !group, 'kiss-color-primary': group}">{{ !group ? 'dialpad' : 'workspaces' }}</icon>
                 </div>
                 <div>

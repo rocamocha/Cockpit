@@ -5,6 +5,7 @@ namespace MongoLite\Aggregation;
 use Iterator;
 use MongoLite\Collection;
 use MongoLite\UtilArrayQuery;
+use MongoLite\Expression\Evaluator;
 use MongoLite\Projection;
 
 use Exception;
@@ -15,9 +16,13 @@ class Cursor implements Iterator {
     protected bool|int $position = false;
     protected array $data = [];
     protected array $pipeline;
-    protected Collection $collection;
+    protected object $collection;
 
-    public function __construct(Collection $collection, array $pipeline) {
+    /**
+     * @param object $collection Collection with find() and getDatabase() methods
+     * @param array $pipeline Aggregation pipeline
+     */
+    public function __construct(object $collection, array $pipeline) {
         $this->collection = $collection;
         $this->pipeline = $pipeline;
     }
@@ -42,7 +47,7 @@ class Cursor implements Iterator {
 
         if (isset($pipeline[0]['$match'])) {
             $filter = $pipeline[0]['$match'];
-            array_shift($pipeline);
+            \array_shift($pipeline);
         }
 
         $data = $this->collection->find($filter)->toArray();
@@ -51,7 +56,7 @@ class Cursor implements Iterator {
         try {
             $this->data = $this->aggregate($data, $pipeline);
         } catch (Throwable $e) {
-            error_log("Aggregation Error in pipeline: " . $e->getMessage());
+            \error_log("Aggregation Error in pipeline: " . $e->getMessage());
             $this->data = []; // Clear data on error
             throw $e; // Re-throw
         }
@@ -65,22 +70,22 @@ class Cursor implements Iterator {
      */
     public function aggregate(array $data, array $pipeline): array {
         foreach ($pipeline as $stage) {
-            $op = array_key_first($stage);
-            if (!$op || !is_string($op) || !str_starts_with($op, '$')) continue;
+            $op = \array_key_first($stage);
+            if (!$op || !\is_string($op) || !\str_starts_with($op, '$')) continue;
 
             $stageDefinition = $stage[$op];
 
             switch ($op) {
                 case '$match':
                     $filterFn = UtilArrayQuery::getFilterFunction($stageDefinition);
-                    $data = array_filter($data, $filterFn);
-                    $data = array_values($data); // Re-index
+                    $data = \array_filter($data, $filterFn);
+                    $data = \array_values($data); // Re-index
                     break;
                 case '$skip':
-                    $data = array_slice($data, intval($stageDefinition));
+                    $data = \array_slice($data, \intval($stageDefinition));
                     break;
                 case '$limit':
-                    $data = array_slice($data, 0, intval($stageDefinition));
+                    $data = \array_slice($data, 0, \intval($stageDefinition));
                     break;
                 case '$project':
                     // Delegate to the refactored Projection class
@@ -90,7 +95,7 @@ class Cursor implements Iterator {
                     $data = $this->unsetFields($data, $stageDefinition);
                     break;
                 case '$sort':
-                    usort($data, $this->buildSortComparator($stageDefinition));
+                    \usort($data, $this->buildSortComparator($stageDefinition));
                     break;
                 case '$group':
                     $data = $this->group($data, $stageDefinition);
@@ -111,7 +116,14 @@ class Cursor implements Iterator {
                     $data = $this->lookup($data, $stageDefinition);
                     break;
                 case '$addFields':
+                case '$set':  // $set is an alias for $addFields
                     $data = $this->addFields($data, $stageDefinition);
+                    break;
+                case '$replaceRoot':
+                    $data = $this->replaceRoot($data, $stageDefinition);
+                    break;
+                case '$replaceWith':
+                    $data = $this->replaceRoot($data, ['newRoot' => $stageDefinition]);
                     break;
                 case '$count':
                     $data = $this->countDocuments($data, $stageDefinition);
@@ -132,7 +144,7 @@ class Cursor implements Iterator {
                     throw new Exception("Unsupported aggregation stage: {$op}");
             }
             // Optimization: Stop processing if data is empty (for most stages)
-            if (empty($data) && !in_array($op, ['$lookup', '$group', '$facet', '$bucket', '$sortByCount', '$count', '$out', '$merge'])) {
+            if (empty($data) && !\in_array($op, ['$lookup', '$group', '$facet', '$bucket', '$sortByCount', '$count', '$out', '$merge'])) {
                 break;
             }
         }
@@ -164,7 +176,7 @@ class Cursor implements Iterator {
 
     public function next(): void {
         if ($this->position === false) $this->valid(); // Load data if needed
-        if (is_int($this->position)) ++$this->position;
+        if (\is_int($this->position)) ++$this->position;
     }
 
     /**
@@ -184,12 +196,12 @@ class Cursor implements Iterator {
      * Handles the $unset stage using ValueAccessor::unset.
      */
     protected function unsetFields(array $data, array|string $fieldsToUnset): array {
-        if (is_string($fieldsToUnset)) $fieldsToUnset = [$fieldsToUnset];
+        if (\is_string($fieldsToUnset)) $fieldsToUnset = [$fieldsToUnset];
         $result = [];
         foreach ($data as $document) {
             $newDoc = $document;
             foreach ($fieldsToUnset as $fieldPath) {
-                $path = ltrim((string)$fieldPath, '$');
+                $path = \ltrim((string)$fieldPath, '$');
                 if (!empty($path)) ValueAccessor::unset($newDoc, $path);
             }
             $result[] = $newDoc;
@@ -203,7 +215,7 @@ class Cursor implements Iterator {
     protected function buildSortComparator(array $sortFields): callable {
         return function ($a, $b) use ($sortFields) {
             foreach ($sortFields as $fieldPath => $order) {
-                $direction = ($order === -1 || strtolower($order ?? '') === 'desc') ? -1 : 1;
+                $direction = ($order === -1 || \strtolower($order ?? '') === 'desc') ? -1 : 1;
                 $valueA = UtilArrayQuery::getNestedValue($a, $fieldPath);
                 $valueB = UtilArrayQuery::getNestedValue($b, $fieldPath);
                 // Add MongoDB type comparison logic here if needed for full fidelity
@@ -216,148 +228,198 @@ class Cursor implements Iterator {
 
     /**
      * Handles the $group stage using UtilArrayQuery for expression evaluation.
+     * Optimized: pre-parses accumulators once before iterating documents.
      */
     protected function group(array $data, array $groupDefinition): array {
-        $groups = [];
 
-        if (!array_key_exists('_id', $groupDefinition)) {
+        if (!\array_key_exists('_id', $groupDefinition)) {
             throw new Exception("\$group requires '_id'.");
         }
 
+        // Pre-parse accumulators ONCE (avoids repeated key()/current() calls per document)
         $idExpression = $groupDefinition['_id'];
+        $accumulators = [];
+        $initState = [];  // Pre-computed initial state for new groups
 
-        foreach ($data as $document) {
-            // Evaluate _id expression
-            $idValue = UtilArrayQuery::evaluateExpressionOperands($idExpression, $document); // Use operand eval helper
-
-            $key = is_scalar($idValue) ? (string)$idValue : json_encode($idValue);
-            // Handle NaN key...
-
-            if (!isset($groups[$key])) {
-                $groups[$key] = ['_id' => $idValue];
-                // Initialize necessary accumulator states (e.g., for $avg)
-                foreach ($groupDefinition as $outField => $accDef) {
-                    if ($outField !== '_id' && is_array($accDef) && key($accDef) === '$avg') {
-                        $groups[$key]["{$outField}_sum"] = 0;
-                        $groups[$key]["{$outField}_count"] = 0;
-                    }
-                }
+        foreach ($groupDefinition as $outputField => $accDef) {
+            if ($outputField === '_id' || !\is_array($accDef) || empty($accDef)) {
+                continue;
             }
 
-            // Process accumulators
-            foreach ($groupDefinition as $outputField => $accumulatorDefinition) {
-                if ($outputField === '_id' || !is_array($accumulatorDefinition) || empty($accumulatorDefinition)) continue;
-                $accumulator = key($accumulatorDefinition);
-                $inputExpression = current($accumulatorDefinition);
-                // Evaluate input expression for the accumulator
-                $value = UtilArrayQuery::evaluateExpressionOperands($inputExpression, $document); // Use operand eval helper
+            $type = \key($accDef);
+            $expr = \current($accDef);
 
-                // Apply accumulator logic (using $value)
-                switch ($accumulator) {
-                    case '$sum':
-                        $groups[$key][$outputField] = ($groups[$key][$outputField] ?? 0) + (is_numeric($value) ? $value : 0);
-                        break;
-                    case '$avg':
-                        if (is_numeric($value)) {
-                            $groups[$key]["{$outputField}_sum"] += $value;
-                            $groups[$key]["{$outputField}_count"]++;
-                        }
-                        break;
-                    case '$min':
-                        if ($value !== null && (!isset($groups[$key][$outputField]) || $value < $groups[$key][$outputField])) {
-                            $groups[$key][$outputField] = $value;
-                        } elseif (!isset($groups[$key][$outputField])) {
-                            $groups[$key][$outputField] = null;
-                        }
-                        break;
-                    case '$max':
-                        if ($value !== null && (!isset($groups[$key][$outputField]) || $value > $groups[$key][$outputField])) {
-                            $groups[$key][$outputField] = $value;
-                        } elseif (!isset($groups[$key][$outputField])) {
-                            $groups[$key][$outputField] = null;
-                        }
-                        break;
-                    case '$push':
-                        if (!isset($groups[$key][$outputField])) $groups[$key][$outputField] = [];
-                        $groups[$key][$outputField][] = $value;
-                        break;
-                    case '$addToSet':
-                        if (!isset($groups[$key][$outputField])) $groups[$key][$outputField] = [];
-                        // Simple check; consider more robust uniqueness for objects/arrays if needed
-                        if (!in_array($value, $groups[$key][$outputField], true)) {
-                            $groups[$key][$outputField][] = $value;
-                        }
-                        break;
-                    case '$first':
-                        // Only set if not already set (preserve first value)
-                        if (!isset($groups[$key][$outputField])) {
-                            $groups[$key][$outputField] = $value;
-                        }
-                        break;
-                    case '$last':
-                        // Always update to latest value
-                        $groups[$key][$outputField] = $value;
-                        break;
-                    case '$stdDevPop':
-                    case '$stdDevSamp':
-                        // Initialize tracking arrays for standard deviation
-                        if (!isset($groups[$key]["{$outputField}_values"])) {
-                            $groups[$key]["{$outputField}_values"] = [];
-                        }
-                        if (is_numeric($value)) {
-                            $groups[$key]["{$outputField}_values"][] = $value;
-                        }
-                        break;
-                    default:
-                        throw new Exception("Unsupported accumulator: {$accumulator}");
-                }
+            // Validate accumulator type upfront
+            static $validAccumulators = [
+                '$sum' => true, '$avg' => true, '$min' => true, '$max' => true,
+                '$push' => true, '$addToSet' => true, '$first' => true, '$last' => true,
+                '$stdDevPop' => true, '$stdDevSamp' => true, '$mergeObjects' => true
+            ];
+
+            if (!isset($validAccumulators[$type])) {
+                throw new Exception("Unsupported accumulator: {$type}");
+            }
+
+            $accumulators[$outputField] = [
+                'type' => $type,
+                'expr' => $expr
+            ];
+
+            // Pre-compute initial state based on accumulator type
+            switch ($type) {
+                case '$sum':
+                    $initState[$outputField] = 0;
+                    break;
+                case '$avg':
+                    $initState["{$outputField}_sum"] = 0;
+                    $initState["{$outputField}_count"] = 0;
+                    break;
+                case '$push':
+                case '$addToSet':
+                case '$mergeObjects':
+                    $initState[$outputField] = [];
+                    break;
+                case '$stdDevPop':
+                case '$stdDevSamp':
+                    $initState["{$outputField}_values"] = [];
+                    break;
+                // $min, $max, $first, $last - no pre-initialization needed
             }
         }
 
-        // Finalize accumulators (like $avg, $stdDevPop, $stdDevSamp) and cleanup intermediate fields
+        $groups = [];
+
+        // Main document processing loop
+        foreach ($data as $document) {
+            // Evaluate _id expression
+            $idValue = Evaluator::resolveOperand($idExpression, $document);
+            $key = \is_scalar($idValue) ? (string)$idValue : \json_encode($idValue);
+
+            // Initialize group if new
+            if (!isset($groups[$key])) {
+                $groups[$key] = ['_id' => $idValue] + $initState;
+            }
+
+            $group = &$groups[$key];
+
+            // Process each pre-parsed accumulator
+            foreach ($accumulators as $outputField => $acc) {
+                $value = Evaluator::resolveOperand($acc['expr'], $document);
+
+                switch ($acc['type']) {
+                    case '$sum':
+                        if (\is_numeric($value)) {
+                            $group[$outputField] += $value;
+                        }
+                        break;
+
+                    case '$avg':
+                        if (\is_numeric($value)) {
+                            $group["{$outputField}_sum"] += $value;
+                            $group["{$outputField}_count"]++;
+                        }
+                        break;
+
+                    case '$min':
+                        if ($value !== null) {
+                            if (!isset($group[$outputField]) || $value < $group[$outputField]) {
+                                $group[$outputField] = $value;
+                            }
+                        } elseif (!isset($group[$outputField])) {
+                            $group[$outputField] = null;
+                        }
+                        break;
+
+                    case '$max':
+                        if ($value !== null) {
+                            if (!isset($group[$outputField]) || $value > $group[$outputField]) {
+                                $group[$outputField] = $value;
+                            }
+                        } elseif (!isset($group[$outputField])) {
+                            $group[$outputField] = null;
+                        }
+                        break;
+
+                    case '$push':
+                        $group[$outputField][] = $value;
+                        break;
+
+                    case '$addToSet':
+                        if (!\in_array($value, $group[$outputField], true)) {
+                            $group[$outputField][] = $value;
+                        }
+                        break;
+
+                    case '$first':
+                        if (!\array_key_exists($outputField, $group)) {
+                            $group[$outputField] = $value;
+                        }
+                        break;
+
+                    case '$last':
+                        $group[$outputField] = $value;
+                        break;
+
+                    case '$stdDevPop':
+                    case '$stdDevSamp':
+                        if (\is_numeric($value)) {
+                            $group["{$outputField}_values"][] = $value;
+                        }
+                        break;
+
+                    case '$mergeObjects':
+                        if (\is_array($value)) {
+                            $group[$outputField] = \array_merge($group[$outputField], $value);
+                        }
+                        break;
+                }
+            }
+
+            unset($group); // Break reference
+        }
+
+        // Finalize accumulators that require post-processing
         foreach ($groups as &$group) {
-            foreach ($groupDefinition as $outputField => $accumulatorDefinition) {
-                if ($outputField !== '_id' && is_array($accumulatorDefinition)) {
-                    $accumulator = key($accumulatorDefinition);
-                    
-                    if ($accumulator === '$avg') {
+            foreach ($accumulators as $outputField => $acc) {
+                switch ($acc['type']) {
+                    case '$avg':
                         $count = $group["{$outputField}_count"];
                         $group[$outputField] = ($count > 0) ? ($group["{$outputField}_sum"] / $count) : null;
                         unset($group["{$outputField}_sum"], $group["{$outputField}_count"]);
-                    } elseif ($accumulator === '$stdDevPop' || $accumulator === '$stdDevSamp') {
-                        $values = $group["{$outputField}_values"] ?? [];
-                        $n = count($values);
-                        
+                        break;
+
+                    case '$stdDevPop':
+                    case '$stdDevSamp':
+                        $values = $group["{$outputField}_values"];
+                        $n = \count($values);
+
                         if ($n > 0) {
-                            // Calculate mean
-                            $mean = array_sum($values) / $n;
-                            
-                            // Calculate variance
-                            $variance = 0;
-                            foreach ($values as $value) {
-                                $variance += pow($value - $mean, 2);
+                            $mean = \array_sum($values) / $n;
+                            $variance = 0.0;
+
+                            foreach ($values as $v) {
+                                $diff = $v - $mean;
+                                $variance += $diff * $diff;
                             }
-                            
-                            // Population vs Sample standard deviation
-                            if ($accumulator === '$stdDevPop') {
-                                $variance = $n > 0 ? $variance / $n : 0;
-                            } else { // $stdDevSamp
-                                $variance = $n > 1 ? $variance / ($n - 1) : null;
+
+                            if ($acc['type'] === '$stdDevPop') {
+                                $group[$outputField] = \sqrt($variance / $n);
+                            } else {
+                                // $stdDevSamp requires n > 1
+                                $group[$outputField] = ($n > 1) ? \sqrt($variance / ($n - 1)) : null;
                             }
-                            
-                            $group[$outputField] = $variance !== null ? sqrt($variance) : null;
                         } else {
                             $group[$outputField] = null;
                         }
-                        
+
                         unset($group["{$outputField}_values"]);
-                    }
+                        break;
                 }
             }
         }
-        unset($group); // Break reference
+        unset($group);
 
-        return array_values($groups);
+        return \array_values($groups);
     }
 
     /**
@@ -365,19 +427,19 @@ class Cursor implements Iterator {
      */
     protected function sample(array $data, array $sampleParameters): array {
         if (empty($data)) return [];
-        if (!isset($sampleParameters['size']) || !is_int($sampleParameters['size']) || $sampleParameters['size'] < 0) {
+        if (!isset($sampleParameters['size']) || !\is_int($sampleParameters['size']) || $sampleParameters['size'] < 0) {
             throw new Exception("\$sample requires a positive integer 'size'.");
         }
         $size = $sampleParameters['size'];
         if ($size === 0) return [];
-        if ($size >= count($data)) {
-            shuffle($data);
+        if ($size >= \count($data)) {
+            \shuffle($data);
             return $data;
         }
 
-        $randomKeys = array_rand($data, $size);
+        $randomKeys = \array_rand($data, $size);
         $result = [];
-        if (is_array($randomKeys)) {
+        if (\is_array($randomKeys)) {
             foreach ($randomKeys as $key) $result[] = $data[$key];
         } else {
             $result[] = $data[$randomKeys];
@@ -391,9 +453,9 @@ class Cursor implements Iterator {
     protected function facet(array $data, array $facetDefinitions): array {
         $facetResult = [];
         foreach ($facetDefinitions as $outputField => $pipeline) {
-            if (!is_array($pipeline)) throw new Exception("Pipeline for facet '{$outputField}' must be an array.");
+            if (!\is_array($pipeline)) throw new Exception("Pipeline for facet '{$outputField}' must be an array.");
             // Run sub-pipeline on a *copy* of the data
-            $facetResult[$outputField] = $this->aggregate(array_merge([], $data), $pipeline);
+            $facetResult[$outputField] = $this->aggregate(\array_merge([], $data), $pipeline);
         }
         return [$facetResult]; // Facet returns a single document containing results
     }
@@ -409,14 +471,14 @@ class Cursor implements Iterator {
         $localFieldPath = $lookupDefinition['localField'];
         $foreignFieldPath = $lookupDefinition['foreignField'];
         $as = $lookupDefinition['as'];
-        if (!is_array($fromData)) throw new Exception("'from' must be an array.");
+        if (!\is_array($fromData)) throw new Exception("'from' must be an array.");
 
         // Index foreign data for faster lookup
         $foreignMap = [];
         foreach ($fromData as $fromDocument) {
             $foreignValue = UtilArrayQuery::getNestedValue($fromDocument, $foreignFieldPath);
             if ($foreignValue !== null) {
-                $key = is_scalar($foreignValue) ? $foreignValue : json_encode($foreignValue);
+                $key = \is_scalar($foreignValue) ? $foreignValue : \json_encode($foreignValue);
                 if (!isset($foreignMap[$key])) $foreignMap[$key] = [];
                 $foreignMap[$key][] = $fromDocument;
             }
@@ -427,7 +489,7 @@ class Cursor implements Iterator {
         foreach ($data as $document) {
             $newDocument = $document;
             $localValue = UtilArrayQuery::getNestedValue($document, $localFieldPath);
-            $lookupKey = is_scalar($localValue) ? $localValue : json_encode($localValue);
+            $lookupKey = \is_scalar($localValue) ? $localValue : \json_encode($localValue);
             $newDocument[$as] = ($localValue !== null && isset($foreignMap[$lookupKey])) ? $foreignMap[$lookupKey] : [];
             $result[] = $newDocument;
         }
@@ -439,18 +501,18 @@ class Cursor implements Iterator {
      */
     protected function bucket(array $data, array $bucketDefinition): array {
         if (!isset($bucketDefinition['groupBy'], $bucketDefinition['boundaries'], $bucketDefinition['output'])) throw new Exception("\$bucket needs 'groupBy', 'boundaries', 'output'.");
-        if (!is_array($bucketDefinition['boundaries']) || count($bucketDefinition['boundaries']) < 2) throw new Exception("'boundaries' needs array with >= 2 elements.");
+        if (!\is_array($bucketDefinition['boundaries']) || \count($bucketDefinition['boundaries']) < 2) throw new Exception("'boundaries' needs array with >= 2 elements.");
 
         $groupByExpr = $bucketDefinition['groupBy'];
         $boundaries = $bucketDefinition['boundaries'];
-        sort($boundaries);
+        \sort($boundaries);
         $outputDef = $bucketDefinition['output'];
         $defaultBucketId = $bucketDefinition['default'] ?? null;
         $hasDefaultBucket = ($defaultBucketId !== null);
 
         // Initialize buckets
         $buckets = [];
-        $numBoundaries = count($boundaries);
+        $numBoundaries = \count($boundaries);
         for ($i = 0; $i < $numBoundaries - 1; $i++) {
             $buckets[] = ['_id' => $boundaries[$i], 'min' => $boundaries[$i], 'max' => $boundaries[$i + 1], 'items' => []];
         }
@@ -458,7 +520,7 @@ class Cursor implements Iterator {
 
         // Assign documents to buckets
         foreach ($data as $document) {
-            $value = UtilArrayQuery::evaluateExpressionOperands($groupByExpr, $document); // Evaluate groupBy
+            $value = Evaluator::resolveOperand($groupByExpr, $document); // Evaluate groupBy
             $assigned = false;
             if ($value !== null) { // Compare based on type if needed
                 foreach ($buckets as &$bucket) {
@@ -489,7 +551,7 @@ class Cursor implements Iterator {
         }
 
         // Sort results by _id
-        usort($resultBuckets, fn($a, $b) => (is_numeric($a['_id']) && is_numeric($b['_id'])) ? ($a['_id'] <=> $b['_id']) : strcmp((string)$a['_id'], (string)$b['_id']));
+        \usort($resultBuckets, fn($a, $b) => (\is_numeric($a['_id']) && \is_numeric($b['_id'])) ? ($a['_id'] <=> $b['_id']) : \strcmp((string)$a['_id'], (string)$b['_id']));
         return $resultBuckets;
     }
 
@@ -498,9 +560,9 @@ class Cursor implements Iterator {
      */
     protected function calculateBucketOutput(array &$processedBucket, array $outputDef, array $items): void {
         foreach ($outputDef as $field => $operation) {
-            if ($field === '_id' || !is_array($operation) || empty($operation)) continue;
-            $accumulator = key($operation);
-            $inputExpr = current($operation);
+            if ($field === '_id' || !\is_array($operation) || empty($operation)) continue;
+            $accumulator = \key($operation);
+            $inputExpr = \current($operation);
 
             // Apply accumulator logic using evaluated input expression
             switch ($accumulator) {
@@ -509,8 +571,8 @@ class Cursor implements Iterator {
                     $sum = 0;
                     $count = 0;
                     foreach ($items as $item) {
-                        $val = UtilArrayQuery::evaluateExpressionOperands($inputExpr, $item);
-                        if (is_numeric($val)) {
+                        $val = Evaluator::resolveOperand($inputExpr, $item);
+                        if (\is_numeric($val)) {
                             $sum += $val;
                             $count++;
                         }
@@ -522,7 +584,7 @@ class Cursor implements Iterator {
                     $aggValue = null;
                     $isMin = ($accumulator === '$min');
                     foreach ($items as $item) {
-                        $val = UtilArrayQuery::evaluateExpressionOperands($inputExpr, $item);
+                        $val = Evaluator::resolveOperand($inputExpr, $item);
                         if ($val !== null) {
                             if ($aggValue === null || ($isMin && $val < $aggValue) || (!$isMin && $val > $aggValue)) {
                                 $aggValue = $val;
@@ -532,14 +594,14 @@ class Cursor implements Iterator {
                     $processedBucket[$field] = $aggValue;
                     break;
                 case '$push':
-                    $processedBucket[$field] = array_map(fn($item) => UtilArrayQuery::evaluateExpressionOperands($inputExpr, $item), $items);
+                    $processedBucket[$field] = \array_map(fn($item) => Evaluator::resolveOperand($inputExpr, $item), $items);
                     break;
                 case '$addToSet':
                     $values = [];
                     $uniqueCheck = [];
                     foreach ($items as $item) {
-                        $val = UtilArrayQuery::evaluateExpressionOperands($inputExpr, $item);
-                        $key = is_scalar($val) ? (string)$val : json_encode($val);
+                        $val = Evaluator::resolveOperand($inputExpr, $item);
+                        $key = \is_scalar($val) ? (string)$val : \json_encode($val);
                         if (!isset($uniqueCheck[$key])) {
                             $values[] = $val;
                             $uniqueCheck[$key] = true;
@@ -550,7 +612,7 @@ class Cursor implements Iterator {
                 case '$first':
                     $processedBucket[$field] = null;
                     foreach ($items as $item) {
-                        $val = UtilArrayQuery::evaluateExpressionOperands($inputExpr, $item);
+                        $val = Evaluator::resolveOperand($inputExpr, $item);
                         $processedBucket[$field] = $val;
                         break; // Take only the first value
                     }
@@ -558,7 +620,7 @@ class Cursor implements Iterator {
                 case '$last':
                     $processedBucket[$field] = null;
                     foreach ($items as $item) {
-                        $val = UtilArrayQuery::evaluateExpressionOperands($inputExpr, $item);
+                        $val = Evaluator::resolveOperand($inputExpr, $item);
                         $processedBucket[$field] = $val; // Keep overwriting to get the last
                     }
                     break;
@@ -566,18 +628,18 @@ class Cursor implements Iterator {
                 case '$stdDevSamp':
                     $values = [];
                     foreach ($items as $item) {
-                        $val = UtilArrayQuery::evaluateExpressionOperands($inputExpr, $item);
-                        if (is_numeric($val)) {
+                        $val = Evaluator::resolveOperand($inputExpr, $item);
+                        if (\is_numeric($val)) {
                             $values[] = $val;
                         }
                     }
                     
-                    $n = count($values);
+                    $n = \count($values);
                     if ($n > 0) {
-                        $mean = array_sum($values) / $n;
+                        $mean = \array_sum($values) / $n;
                         $variance = 0;
                         foreach ($values as $value) {
-                            $variance += pow($value - $mean, 2);
+                            $variance += \pow($value - $mean, 2);
                         }
                         
                         if ($accumulator === '$stdDevPop') {
@@ -586,7 +648,7 @@ class Cursor implements Iterator {
                             $variance = $n > 1 ? $variance / ($n - 1) : null;
                         }
                         
-                        $processedBucket[$field] = $variance !== null ? sqrt($variance) : null;
+                        $processedBucket[$field] = $variance !== null ? \sqrt($variance) : null;
                     } else {
                         $processedBucket[$field] = null;
                     }
@@ -602,25 +664,25 @@ class Cursor implements Iterator {
      */
     protected function unwind(array $data, array|string $unwindOptions): array {
         // Normalize options...
-        if (is_string($unwindOptions)) {
+        if (\is_string($unwindOptions)) {
             $pathExpr = $unwindOptions;
             $preserve = false;
             $includeArrayIndex = null;
-        } elseif (is_array($unwindOptions)) {
+        } elseif (\is_array($unwindOptions)) {
             $pathExpr = $unwindOptions['path'] ?? null;
             $preserve = $unwindOptions['preserveNullAndEmptyArrays'] ?? false;
             $includeArrayIndex = $unwindOptions['includeArrayIndex'] ?? null;
         } else throw new Exception("Invalid \$unwind options.");
-        if (!$pathExpr || !is_string($pathExpr) || !str_starts_with($pathExpr, '$')) throw new Exception("\$unwind 'path' must be a string starting with $");
-        $fieldPath = substr($pathExpr, 1);
+        if (!$pathExpr || !\is_string($pathExpr) || !\str_starts_with($pathExpr, '$')) throw new Exception("\$unwind 'path' must be a string starting with $");
+        $fieldPath = \substr($pathExpr, 1);
 
         $result = [];
         foreach ($data as $document) {
             $valueToUnwind = UtilArrayQuery::getNestedValue($document, $fieldPath); // Use getter
 
-            if (is_array($valueToUnwind)) {
+            if (\is_array($valueToUnwind)) {
                 if (!empty($valueToUnwind)) {
-                    $isList = array_keys($valueToUnwind) === range(0, count($valueToUnwind) - 1);
+                    $isList = \array_keys($valueToUnwind) === \range(0, \count($valueToUnwind) - 1);
                     foreach ($valueToUnwind as $index => $item) {
                         $newDocument = $document;
                         ValueAccessor::set($newDocument, $fieldPath, $item); // Use setter
@@ -653,7 +715,7 @@ class Cursor implements Iterator {
             $newDoc = $document;
             foreach ($fieldsToAdd as $field => $expression) {
                 // Evaluate expression and set using ValueAccessor
-                $value = UtilArrayQuery::evaluateExpressionOperands($expression, $document);
+                $value = Evaluator::resolveOperand($expression, $document);
                 ValueAccessor::set($newDoc, $field, $value);
             }
             $result[] = $newDoc;
@@ -662,11 +724,38 @@ class Cursor implements Iterator {
     }
 
     /**
+     * Handles the $replaceRoot stage - replaces each document with a new root.
+     */
+    protected function replaceRoot(array $data, array $replaceRootDefinition): array {
+        if (!isset($replaceRootDefinition['newRoot'])) {
+            throw new Exception('$replaceRoot requires "newRoot" field');
+        }
+
+        $newRootExpr = $replaceRootDefinition['newRoot'];
+        $result = [];
+
+        foreach ($data as $document) {
+            $newRoot = Evaluator::resolveOperand($newRootExpr, $document);
+
+            // MongoDB requires newRoot to evaluate to an object
+            if (!\is_array($newRoot)) {
+                throw new Exception('$replaceRoot newRoot must evaluate to an object');
+            }
+
+            $result[] = $newRoot;
+        }
+
+        return $result;
+    }
+
+    /**
      * Handles the $count stage.
      */
     protected function countDocuments(array $data, string $outputFieldName): array {
-        if (!is_string($outputFieldName) || empty($outputFieldName)) throw new Exception("\$count needs non-empty string output field name.");
-        return [[$outputFieldName => count($data)]]; // Return single document array
+        if (!\is_string($outputFieldName) || empty($outputFieldName)) throw new Exception("\$count needs non-empty string output field name.");
+        $count = \count($data);
+        // MongoDB returns empty result set when count is 0
+        return $count > 0 ? [[$outputFieldName => $count]] : [];
     }
 
     /**
@@ -674,7 +763,7 @@ class Cursor implements Iterator {
      */
     protected function sortByCount(array $data, mixed $groupByExpression): array {
         $groupedData = $this->group($data, ['_id' => $groupByExpression, 'count' => ['$sum' => 1]]);
-        usort($groupedData, $this->buildSortComparator(['count' => -1]));
+        \usort($groupedData, $this->buildSortComparator(['count' => -1]));
         return $groupedData;
     }
 
@@ -683,7 +772,7 @@ class Cursor implements Iterator {
      * MongoDB compatibility: replaces the target collection entirely.
      */
     protected function out(array $data, string $outputCollection): array {
-        if (empty($outputCollection) || !is_string($outputCollection)) {
+        if (empty($outputCollection) || !\is_string($outputCollection)) {
             throw new Exception('$out requires a valid collection name');
         }
 
@@ -697,7 +786,7 @@ class Cursor implements Iterator {
         }
 
         // Drop existing collection if it exists
-        if (in_array($sanitizedName, $database->getCollectionNames())) {
+        if (\in_array($sanitizedName, $database->getCollectionNames())) {
             $database->selectCollection($sanitizedName)->drop();
         }
 
@@ -735,7 +824,7 @@ class Cursor implements Iterator {
         }
 
         // Create collection if it doesn't exist
-        if (!in_array($sanitizedName, $database->getCollectionNames())) {
+        if (!\in_array($sanitizedName, $database->getCollectionNames())) {
             $database->createCollection($sanitizedName);
         }
 
@@ -744,7 +833,7 @@ class Cursor implements Iterator {
         foreach ($data as $document) {
             // Build match criteria based on "on" field(s)
             $matchCriteria = [];
-            if (is_array($on)) {
+            if (\is_array($on)) {
                 foreach ($on as $field) {
                     if (isset($document[$field])) {
                         $matchCriteria[$field] = $document[$field];

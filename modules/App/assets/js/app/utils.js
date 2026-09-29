@@ -1,3 +1,5 @@
+import { Engine as JSLiteEngine } from "../../vendor/jslite.esm.js";
+
 let formatSize = function(bytes) {
     if (bytes == 0) { return "0.00 B"; }
     let e = Math.floor(Math.log(bytes) / Math.log(1024));
@@ -69,20 +71,21 @@ let copyText = function(text, cb) {
     if (cb) cb();
 }
 
+let interpolateEngine = new JSLiteEngine();
+
 let interpolate = function(str, params) {
-    const names = Object.keys(params);
-    const vals = Object.values(params);
-    return new Function(...names, `return \`${str}\`;`)(...vals);
+    const source = `return \`${str}\`;`;
+    return interpolateEngine.run(interpolateEngine.compile(source), Object.assign({}, params));
 }
 
 let uuid = function() {
 
-    if (typeof(crypto.randomUUID) === 'function') {
+    if (typeof(crypto) !== 'undefined' && typeof(crypto.randomUUID) === 'function') {
         return crypto.randomUUID();
     }
 
     return ([1e7]+-1e3+-4e3+-8e3+-1e11).replace(/[018]/g, c =>
-        (c ^ crypto.getRandomValues(new Uint8Array(1))[0] & 15 >> c / 4).toString(16)
+        (c ^ (typeof(crypto) !== 'undefined' && typeof(crypto.getRandomValues) === 'function' ? crypto.getRandomValues(new Uint8Array(1))[0] : Math.floor(Math.random() * 255)) & 15 >> c / 4).toString(16)
     );
 }
 
@@ -91,7 +94,7 @@ let nanoid = function(size = 10) {
     const alphabet = "0123456789ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz";
     let id = '';
 
-    if (typeof (crypto.getRandomValues) === 'function') {
+    if (typeof(crypto) !== 'undefined' && typeof(crypto.getRandomValues) === 'function') {
         const bytes = new Uint8Array(size);
         crypto.getRandomValues(bytes);
         for (let i = 0; i < size; i++) id += alphabet[bytes[i] % alphabet.length];
@@ -145,10 +148,20 @@ let base64decode = function(str) {
     }).join(''));
 };
 
+let escape = function(html) {
+    return String(html)
+        .replace(/&/g, "&amp;")
+        .replace(/</g, "&lt;")
+        .replace(/>/g, "&gt;")
+        .replace(/"/g, "&quot;")
+        .replace(/'/g, "&#039;");
+};
+
 export default {
     base64encode,
     base64decode,
     copyText,
+    escape,
     formatSize,
     formatDuration,
     formatNumber,

@@ -64,7 +64,11 @@ foreach ($permissions as $key => $meta) {
                 <kiss-card class="kiss-margin kiss-padding" theme="bordered contrast" hover="shadow" v-for="(meta, group) in groups">
 
                     <div class="kiss-flex kiss-flex-middle" :class="{'kiss-color-muted': !visible[group]}" @click="visible[group]=!visible[group]">
+<<<<<<< HEAD
                         <icon class="kiss-margin-small-right">workspaces</icon>
+=======
+                        <icon class="kiss-margin-small-end">workspaces</icon>
+>>>>>>> develop
                         <a class="kiss-link-muted kiss-text-caption kiss-text-bold kiss-flex-1">{{ t(group) }}</a>
                         <a :class="visible[group] ? 'kiss-color-primary' : 'kiss-color-muted'">
                             <icon>unfold_more</icon>
@@ -73,11 +77,14 @@ foreach ($permissions as $key => $meta) {
 
                     <div class="kiss-margin" :class="{'kiss-hidden': !visible[group]}">
 
-                        <component :is="meta.component" v-model="role.permissions" v-bind="meta.props || {}" v-if="meta.component"></component>
+                        <component :is="meta.component" v-model="role.permissions" v-bind="meta.props || {}" :expressions="role.expressions" v-if="meta.component"></component>
 
                         <div v-if="!meta.component">
                             <div class="kiss-margin-small kiss-size-small" v-for="(label, permission) in meta">
-                                <field-boolean v-model="role.permissions[permission]" :label="label"></field-boolean>
+                                <div class="kiss-flex kiss-flex-middle">
+                                    <field-boolean v-model="role.permissions[permission]" :label="t(label)"></field-boolean>
+                                    <a v-if="role.permissions[permission]" class="kiss-margin-small-start kiss-size-xsmall" :class="role.expressions[permission]?.expr ? 'kiss-color-primary' : 'kiss-color-muted'" @click.stop="editExpression(permission)" :title="t('Item rule')"><icon size="small">code</icon></a>
+                                </div>
                             </div>
                         </div>
 
@@ -88,7 +95,7 @@ foreach ($permissions as $key => $meta) {
                 <app-actionbar>
 
                     <kiss-container size="small">
-                        <div class="kiss-flex kiss-flex-middle kiss-flex-right">
+                        <div class="kiss-flex kiss-flex-middle kiss-flex-end">
                             <div class="kiss-button-group">
                                 <a class="kiss-button" href="<?= $this->route('/system/users/roles') ?>">
                                     <span v-if="!role._id"><?= t('Cancel') ?></span>
@@ -113,9 +120,12 @@ foreach ($permissions as $key => $meta) {
 
                 data() {
 
+                    let role = <?= json_encode($role) ?>;
+                    if (!role.expressions) role.expressions = {};
+
                     return {
                         saving: false,
-                        role: <?= json_encode($role) ?>,
+                        role,
                         permissions: <?= json_encode($permissions) ?>,
                         visible: {},
                         filter: ''
@@ -144,6 +154,23 @@ foreach ($permissions as $key => $meta) {
 
                 methods: {
 
+                    editExpression(permission) {
+
+                        this.$dialog('system:assets/dialogs/acl-expression.js', {
+                            permission,
+                            expression: this.role.expressions[permission] || null
+                        }, {
+                            save: (entry) => {
+
+                                if (entry) {
+                                    this.role.expressions[permission] = entry;
+                                } else {
+                                    delete this.role.expressions[permission];
+                                }
+                            }
+                        });
+                    },
+
                     save() {
 
                         let isUpdate = this.role._id;
@@ -154,6 +181,7 @@ foreach ($permissions as $key => $meta) {
                             role: this.role
                         }).then(role => {
 
+                            if (!role.expressions) role.expressions = {};
                             this.role = role;
                             this.saving = false;
 

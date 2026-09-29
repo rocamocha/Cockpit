@@ -16,6 +16,81 @@ class Model extends \Lime\Helper {
         });
     }
 
+<<<<<<< HEAD
+=======
+    public function validateComputedConfig(array $model): void {
+
+        $computed = $model['meta']['computed'] ?? null;
+
+        if (\is_null($computed)) {
+            return;
+        }
+
+        if (!\is_array($computed)) {
+            throw new \App\Exception\AppNotification('meta.computed must be an object map of field names to ScriptLite expressions');
+        }
+
+        $engine = $this->app->helper('script')->engine();
+
+        foreach ($computed as $fieldName => $source) {
+
+            if (!\is_string($fieldName) || !\trim($fieldName)) {
+                throw new \App\Exception\AppNotification("Computed field <{$fieldName}> is not a valid content field");
+            }
+
+            if (!\is_string($source) || !\trim($source)) {
+                throw new \App\Exception\AppNotification("Computed field <{$fieldName}> requires a non-empty ScriptLite expression");
+            }
+
+            try {
+                $engine->compile($source);
+            } catch (\Throwable $e) {
+                throw new \App\Exception\AppNotification("Computed field <{$fieldName}> has an invalid ScriptLite expression: {$e->getMessage()}");
+            }
+        }
+    }
+
+    public function applyComputedFields(array $model, array $item, bool $isUpdate = false, array $context = []): array {
+
+        $computed = $model['meta']['computed'] ?? null;
+
+        if (!\is_array($computed) || !\count($computed)) {
+            return $item;
+        }
+
+        $now = $context['now'] ?? \time();
+        $engine = $this->app->helper('script')->engine();
+
+        $globals = [
+            'context' => $context,
+            'model' => $model,
+            'user' => $context['user'] ?? null,
+            'isUpdate' => $isUpdate,
+            'now' => $now,
+            'slugify' => fn(string $value, string $replacement = '-') => $this->app->helper('utils')->slugify($value, $replacement),
+        ];
+
+        foreach ($computed as $fieldName => $source) {
+
+            if (!\is_string($fieldName) || !\is_string($source) || !\trim($source)) {
+                continue;
+            }
+
+            $globals['field'] = $fieldName;
+            $globals['value'] = $item[$fieldName] ?? null;
+            $globals['item'] = $item;
+
+            try {
+                $item[$fieldName] = $engine->eval($source, $globals);
+            } catch (\Throwable $e) {
+                // throw new \App\Exception\AppNotification("Failed to compute <{$fieldName}>: {$e->getMessage()}");
+            }
+        }
+
+        return $item;
+    }
+
+>>>>>>> develop
     /**
      * Create a new content model.
      *
@@ -25,21 +100,21 @@ class Model extends \Lime\Helper {
      */
     public function create(string $name, array $data = []) {
 
-        if (!trim($name)) {
+        if (!\trim($name)) {
             return false;
         }
 
-        $name = preg_replace('/[^A-Za-z0-9]/', '', $name);
+        $name = \preg_replace('/[^A-Za-z0-9]/', '', $name);
 
         if ($this->exists($name)) {
             return false;
         }
 
-        $time = time();
+        $time = \time();
 
         $data['name'] = $name;
 
-        $model = array_replace_recursive([
+        $model = \array_replace_recursive([
             'name'      => $name,
             'label'     => $name,
             'info'      => '',
@@ -51,6 +126,8 @@ class Model extends \Lime\Helper {
             '_created'  => $time,
             '_modified'  => $time
         ], $data);
+
+        $this->validateComputedConfig($model);
 
         if ($this->storage === 'database') {
 
@@ -96,14 +173,16 @@ class Model extends \Lime\Helper {
             return false;
         }
 
-        $data['_modified'] = time();
+        $data['_modified'] = \time();
 
         if ($this->storage === 'database') {
 
             if (isset($data['_id'])) unset($data['_id']);
 
             $model  = $this->app->dataStorage->findOne('content/models', ['name' => $name]);
-            $model  = array_merge($model, $data);
+            $model  = \array_merge($model, $data);
+
+            $this->validateComputedConfig($model);
 
             $this->app->dataStorage->save('content/models', $model);
 
@@ -116,14 +195,15 @@ class Model extends \Lime\Helper {
             }
 
             $model  = include($metapath);
-            $model  = array_merge($model, $data);
+            $model  = \array_merge($model, $data);
+            $this->validateComputedConfig($model);
             $export = $this->app->helper('utils')->var_export($model, true);
 
             if (!$this->app->helper('fs')->write($metapath, "<?php\n return {$export};")) {
                 return false;
             }
 
-            if (function_exists('opcache_invalidate')) opcache_invalidate($metapath, true);
+            if (\function_exists('opcache_invalidate')) \opcache_invalidate($metapath, true);
         }
 
         $this->app->trigger('content.update.model', [$model]);
@@ -143,7 +223,7 @@ class Model extends \Lime\Helper {
      */
     public function save(string $name, array $data) {
 
-        if (!trim($name)) {
+        if (!\trim($name)) {
             return false;
         }
 
@@ -169,12 +249,16 @@ class Model extends \Lime\Helper {
         } else {
             $metapath = $this->app->path("#storage:content/{$name}.model.php");
             $this->app->helper('fs')->delete($metapath);
+<<<<<<< HEAD
             if (function_exists('opcache_invalidate')) opcache_invalidate($metapath, true);
+=======
+            if (\function_exists('opcache_invalidate')) \opcache_invalidate($metapath, true);
+>>>>>>> develop
         }
 
         if ($model['type'] == 'singleton') {
             $this->app->dataStorage->remove('content/singletons', ['_model' => $name]);
-        } elseif (in_array($model['type'], ['collection', 'tree'])) {
+        } elseif (\in_array($model['type'], ['collection', 'tree'])) {
 
             $this->app->dataStorage->dropCollection("content/collections/{$name}");
 
@@ -214,6 +298,33 @@ class Model extends \Lime\Helper {
         return $this->models[$name] ?? null;
     }
 
+<<<<<<< HEAD
+=======
+    protected function getComputedFieldNames(array $model): array {
+
+        $names = [];
+        $locales = $this->app->helper('locales')->locales();
+
+        foreach (($model['fields'] ?? []) as $field) {
+
+            if (!isset($field['name'])) {
+                continue;
+            }
+
+            $names[] = $field['name'];
+
+            if (($field['i18n'] ?? false)) {
+                foreach ($locales as $locale) {
+                    if (($locale['i18n'] ?? null) === 'default') continue;
+                    $names[] = "{$field['name']}_{$locale['i18n']}";
+                }
+            }
+        }
+
+        return \array_values(\array_unique($names));
+    }
+
+>>>>>>> develop
     /**
      * Get all content models.
      *
@@ -248,7 +359,7 @@ class Model extends \Lime\Helper {
             }
         }
 
-        ksort($models);
+        \ksort($models);
 
         if ($persistent) {
             $this->app->memory->set('content.models', $models);

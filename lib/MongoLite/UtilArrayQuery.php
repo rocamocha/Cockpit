@@ -2,6 +2,12 @@
 
 namespace MongoLite;
 
+use MongoLite\Expression\Evaluator;
+use MongoLite\Query\Operators;
+
+/**
+ * Array query utilities - facade for query filtering and expression evaluation
+ */
 class UtilArrayQuery {
 
     protected static array $closures = [];
@@ -10,36 +16,28 @@ class UtilArrayQuery {
      * Create a filter function from criteria array
      */
     public static function getFilterFunction(array $criteria): callable {
-
         return empty($criteria) ?
-                fn() => true :
-                fn($document) => self::evaluateCondition($document, $criteria);
+            fn() => true :
+            fn($document) => self::evaluateCondition($document, $criteria);
     }
 
     /**
      * Main method to evaluate if a document matches the given criteria
      */
     public static function evaluateCondition($document, array $criteria): bool {
-
-        // Handle empty criteria
         if (empty($criteria)) {
             return true;
         }
 
-        // Process all conditions with AND logic by default
         foreach ($criteria as $key => $value) {
-
             // Handle special top-level operators
             if ($key[0] === '$') {
-
-                // List of valid top-level operators
                 $topLevelOperators = ['$and', '$or', '$where', '$nor', '$expr'];
 
-                if (in_array($key, $topLevelOperators)) {
-
+                if (\in_array($key, $topLevelOperators)) {
                     switch ($key) {
                         case '$and':
-                            if (!is_array($value)) {
+                            if (!\is_array($value)) {
                                 return false;
                             }
                             foreach ($value as $subCriteria) {
@@ -50,7 +48,7 @@ class UtilArrayQuery {
                             break;
 
                         case '$or':
-                            if (!is_array($value)) {
+                            if (!\is_array($value)) {
                                 return false;
                             }
                             $orResult = false;
@@ -66,65 +64,64 @@ class UtilArrayQuery {
                             break;
 
                         case '$where':
-                            if (is_string($value) || !is_callable($value)) {
-                                throw new \InvalidArgumentException($key . ' Function should be callable');
-                            }
-
-                            // Register the closure and get a unique ID
+                            $value = \MongoLite\ClosureGuard::requireAnonymous(
+                                $value,
+                                $key . ' function should be an anonymous Closure'
+                            );
                             $uid = self::registerClosure($value);
-
-                            // Call it the same way as the original implementation
                             if (!self::closureCall($uid, $document)) {
                                 return false;
                             }
                             break;
 
                         case '$nor':
-                            if (!is_array($value)) {
+                            if (!\is_array($value)) {
                                 return false;
                             }
                             foreach ($value as $subCriteria) {
                                 if (self::evaluateCondition($document, $subCriteria)) {
-                                    return false; // If any criteria matches, $nor fails
+                                    return false;
                                 }
                             }
                             break;
+
                         case '$expr':
-                            if (!is_array($value)) {
+                            if (!\is_array($value)) {
                                 return false;
                             }
-                            if (!self::evaluateExpression($value, $document)) {
+                            // Use the new Expression evaluator
+                            if (!Evaluator::evaluate($value, $document)) {
                                 return false;
                             }
                             break;
                     }
-
                 } else {
-
-                    // Handle field with operator name (e.g., "$exists") as a regular field
+                    // Handle field with operator name as a regular field
                     $fieldValue = self::getNestedValue($document, $key);
-
-                    // Handle as regular field check
-                    if (is_array($value) && !empty($value) && isset(array_keys($value)[0]) && array_keys($value)[0][0] === '$') {
+                    if (\is_array($value) && !empty($value) && isset(\array_keys($value)[0]) && \array_keys($value)[0][0] === '$') {
                         if (!self::check($fieldValue, $value)) {
                             return false;
                         }
+<<<<<<< HEAD
                     } else if (is_null($value)) {
                         // MongoDB behavior: null matches both null values and non-existent fields
+=======
+                    } elseif (\is_null($value)) {
+>>>>>>> develop
                         if (self::getNestedValueExists($document, $key) && $fieldValue !== null) {
                             return false;
                         }
                     } else {
-                        if (!self::getNestedValueExists($document, $key) || $fieldValue != $value) {
+                        if (!self::getNestedValueExists($document, $key) || !self::matchesDirectValue($fieldValue, $value)) {
                             return false;
                         }
                     }
                 }
             } else {
-
                 // Handle field conditions
                 $fieldValue = self::getNestedValue($document, $key);
 
+<<<<<<< HEAD
                 // Check if the value is a condition array or a direct value
                 if (is_array($value) && !empty($value)) {
                     $firstKey = array_keys($value)[0];
@@ -132,22 +129,35 @@ class UtilArrayQuery {
                         // This is a condition array with operators like {age: {$gt: 25}}
                         
                         // Handle special case for $exists - it needs to check field presence, not value
+=======
+                if (\is_array($value) && !empty($value)) {
+                    $firstKey = \array_keys($value)[0];
+                    if (\is_string($firstKey) && \str_starts_with($firstKey, '$')) {
+                        // Handle $exists specially
+>>>>>>> develop
                         if (isset($value['$exists'])) {
                             $fieldExists = self::getNestedValueExists($document, $key);
                             $shouldExist = (bool)$value['$exists'];
                             if ($fieldExists !== $shouldExist) {
                                 return false;
                             }
+<<<<<<< HEAD
                             // If there are other operators besides $exists, continue checking them
                             $otherConditions = array_diff_key($value, ['$exists' => true]);
                             if (!empty($otherConditions)) {
                                 if (!$fieldExists) {
                                     // Field doesn't exist, other conditions can't be checked
+=======
+                            $otherConditions = \array_diff_key($value, ['$exists' => true]);
+                            if (!empty($otherConditions)) {
+                                if (!$fieldExists) {
+>>>>>>> develop
                                     return false;
                                 }
                                 if (!self::check($fieldValue, $otherConditions)) {
                                     return false;
                                 }
+<<<<<<< HEAD
                             }
                         }
                         // Handle special case for $elemMatch on arrays
@@ -223,11 +233,32 @@ class UtilArrayQuery {
                             // Simple equality check for other cases (including array to array comparison)
                             return false;
                         }
+=======
+                            }
+                        } else {
+                            if (!self::check($fieldValue, $value)) {
+                                return false;
+                            }
+                        }
+                    } else {
+                        if (!self::matchesDirectValue($fieldValue, $value)) {
+                            return false;
+                        }
+                    }
+                } elseif (\is_null($value)) {
+                    if (self::getNestedValueExists($document, $key) && $fieldValue !== null) {
+                        return false;
+                    }
+                } else {
+                    if (!self::getNestedValueExists($document, $key) || !self::matchesDirectValue($fieldValue, $value)) {
+                        return false;
+>>>>>>> develop
                     }
                 }
             }
         }
 
+<<<<<<< HEAD
         // If we get here, all conditions passed
         return true;
     }
@@ -326,55 +357,136 @@ class UtilArrayQuery {
             $values = $newValues;
         }
 
+=======
+>>>>>>> develop
         return true;
     }
 
     /**
-     * Check if an array contains a value, handling nested arrays
+     * Direct field equality with MongoDB-like array semantics.
+     * If a field is a list array, scalar/object equality should match
+     * when any top-level array element equals the query value.
      */
-    private static function checkArrayContains(array $arr, mixed $value): bool {
-        foreach ($arr as $item) {
-            if (is_array($item)) {
-                // Recursively check nested arrays
-                if (self::checkArrayContains($item, $value)) {
+    private static function matchesDirectValue(mixed $fieldValue, mixed $queryValue): bool {
+        if (\is_array($fieldValue) && \array_is_list($fieldValue)) {
+            if ($fieldValue == $queryValue) {
+                return true;
+            }
+
+            foreach ($fieldValue as $item) {
+                if ($item == $queryValue) {
                     return true;
                 }
-            } else if ($item == $value) {
-                return true;
+            }
+
+            return false;
+        }
+
+        return $fieldValue == $queryValue;
+    }
+
+    /**
+     * Check if a value matches query conditions
+     */
+    public static function check(mixed $value, array $condition): bool {
+        // Operators that work on the whole array, not individual elements
+        $wholeArrayOperators = ['$all', '$size', '$elemMatch', '$has', '$geoWithin', '$geoIntersects', '$near'];
+        $hasWholeArrayOperator = false;
+        foreach ($condition as $key => $_) {
+            if (\in_array($key, $wholeArrayOperators)) {
+                $hasWholeArrayOperator = true;
+                break;
+            }
+        }
+
+        // If value is an array and no whole-array operator, check if any element matches
+        if (\is_array($value) && !$hasWholeArrayOperator) {
+            return self::checkArrayWithCondition($value, $condition);
+        }
+
+        // Use the Query Operators class (for whole-array operators or non-array values)
+        return Operators::checkConditions($value, $condition);
+    }
+
+    /**
+     * Check if any element in an array matches the condition
+     */
+    private static function checkArrayWithCondition(array $arr, array $condition): bool {
+        foreach ($arr as $item) {
+            if (\is_array($item)) {
+                if (self::checkArrayWithCondition($item, $condition)) {
+                    return true;
+                }
+            } else {
+                if (Operators::checkConditions($item, $condition)) {
+                    return true;
+                }
             }
         }
         return false;
     }
 
     /**
-     * Store and execute closures (for $where operator)
+     * Get a nested value from an array using dot notation
      */
-    public static function closureCall(string $uid, mixed $doc): mixed {
+    public static function getNestedValue(array $array, string $path): mixed {
+        $keys = \explode('.', $path);
 
-        // Make sure the closure exists
-        if (!isset(self::$closures[$uid])) {
-            throw new \RuntimeException("Closure with ID {$uid} not found");
+        foreach ($keys as $key) {
+            if (!\is_array($array) || !\array_key_exists($key, $array)) {
+                return null;
+            }
+            $array = $array[$key];
         }
 
-        $return = self::$closures[$uid]($doc);
-
-        unset(self::$closures[$uid]);
-
-        return $return;
+        return $array;
     }
 
     /**
-     * Register a closure for the $where operator
+     * Check if a nested value exists in an array
      */
-    public static function registerClosure(callable $closure): string {
-        $uid = uniqid('mongoliteCallable') . bin2hex(random_bytes(5));
+    public static function getNestedValueExists(array $array, string $path): bool {
+        $keys = \explode('.', $path);
+
+        foreach ($keys as $key) {
+            if (!\is_array($array) || !\array_key_exists($key, $array)) {
+                return false;
+            }
+            $array = $array[$key];
+        }
+
+        return true;
+    }
+
+    /**
+     * Evaluate an expression (delegates to Expression\Evaluator)
+     * @deprecated Use Expression\Evaluator::evaluate() directly
+     */
+    public static function evaluateExpression(array $expr, array $doc): mixed {
+        return Evaluator::evaluate($expr, $doc);
+    }
+
+    /**
+     * Evaluate an operand (delegates to Expression\Evaluator)
+     * @deprecated Use Expression\Evaluator::resolveOperand() directly
+     */
+    public static function evaluateExpressionOperands($operand, array $doc): mixed {
+        return Evaluator::resolveOperand($operand, $doc);
+    }
+
+    /**
+     * Register a closure for $where queries
+     */
+    protected static function registerClosure(\Closure $closure): string {
+        $uid = \uniqid('closure_');
         self::$closures[$uid] = $closure;
         return $uid;
     }
 
     /**
-     * Check if a value matches the given condition
+     * Call a registered closure
      */
+<<<<<<< HEAD
     public static function check(mixed $value, array $condition): bool {
 
         // Check if this is a geo operator that needs the full object structure
@@ -1000,3 +1112,12 @@ function pointInPolygon(array $point, array $polygon): bool {
     
     return $inside;
 }
+=======
+    protected static function closureCall(string $uid, array $document): bool {
+        if (!isset(self::$closures[$uid])) {
+            return false;
+        }
+        return (bool)self::$closures[$uid]($document);
+    }
+}
+>>>>>>> develop

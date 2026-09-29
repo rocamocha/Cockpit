@@ -198,10 +198,23 @@ customElements.define('kiss-dropdown', class extends HTMLElement {
         }
         box.addEventListener('click', this._boxClickHandler);
 
+<<<<<<< HEAD
         // Reposition on resize/scroll
         if (!this._repositionHandler) {
             this._repositionHandler = () => {
                 this._positionBox();
+=======
+        // Reposition on resize/scroll (rAF-throttled)
+        if (!this._repositionHandler) {
+            let ticking = false;
+            this._repositionHandler = () => {
+                if (ticking) return;
+                ticking = true;
+                requestAnimationFrame(() => {
+                    this._positionBox();
+                    ticking = false;
+                });
+>>>>>>> develop
             };
             window.addEventListener('resize', this._repositionHandler, { passive: true });
             window.addEventListener('scroll', this._repositionHandler, { passive: true });

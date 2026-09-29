@@ -34,7 +34,7 @@ class Api extends App {
 
         $this->checkAndLockResource('api.settings.public');
 
-        return $this->render('system:views/api/key.php', compact('key'));
+        return $this->render('system:views/api/key.php', \compact('key'));
     }
 
     public function key($id = null) {
@@ -53,7 +53,7 @@ class Api extends App {
 
         $key['meta'] = new ArrayObject( $key['meta']);
 
-        return $this->render('system:views/api/key.php', compact('key'));
+        return $this->render('system:views/api/key.php', \compact('key'));
     }
 
     public function create() {
@@ -65,7 +65,7 @@ class Api extends App {
             'meta' => new ArrayObject([])
         ];
 
-        return $this->render('system:views/api/key.php', compact('key'));
+        return $this->render('system:views/api/key.php', \compact('key'));
     }
 
     public function remove() {
@@ -95,19 +95,19 @@ class Api extends App {
             return $this->stop(['error' => 'Key data is missing'], 412);
         }
 
-        $key['_modified'] = time();
+        $key['_modified'] = \time();
         $isUpdate = isset($key['_id']);
 
         if (!$isUpdate) {
             $key['_created'] = $key['_modified'];
         }
 
-        if (!isset($key['key']) || !trim($key['key'])) {
+        if (!isset($key['key']) || !\trim($key['key'])) {
             return $this->stop(['error' => 'Key required'], 412);
         }
 
         foreach (['key', 'name'] as $k) {
-            $key[$k] = strip_tags(trim($key[$k]));
+            $key[$k] = \strip_tags(\trim($key[$k]));
         }
 
         // unique check
@@ -123,7 +123,7 @@ class Api extends App {
 
         $key = $this->app->dataStorage->findOne('system/api_keys', ['_id' => $key['_id']]);
 
-        $key['meta'] = new ArrayObject(is_array($key['meta']) ? $key['meta'] : []);
+        $key['meta'] = new ArrayObject(\is_array($key['meta']) ? $key['meta'] : []);
 
         $this->cache();
 
@@ -145,6 +145,7 @@ class Api extends App {
     public function openapi() {
 
         $this->helper('session')->close();
+        $format = \strtolower($this->param('format', 'yaml'));
 
         $paths = [(new \Symfony\Component\Finder\Finder())->files()->in(APP_DIR.'/modules')->notPath('#vendor#')];
 
@@ -160,22 +161,26 @@ class Api extends App {
             $paths[] = (new \Symfony\Component\Finder\Finder())->files()->in($this->app->path('#root:config/api'))->notPath('#vendor#');
         }
 
-        $yaml = \OpenApi\Generator::scan($paths, ['analyser' => new \OpenApi\Analysers\TokenAnalyser()])->toYaml();
+        $openapi = \OpenApi\Generator::scan($paths, ['analyser' => new \SwaggerPhp\AlternativeTokenAnalyser()]);
+        
+        $this->app->trigger('system.openapi.collect', [$openapi]);
+        
+        $output = $format === 'json' ? $openapi->toJson() : $openapi->toYaml();
 
         // replace placeholders
-        $yaml = \str_replace([
-            APP_DIR,
+        $output = \str_replace([
+            '{{ app.api.url }}',
             '{{ app.name }}',
             '{{ app.version }}',
         ], [
             $this->app->module('system')->spaceUrl('/api'),
             $this->app->retrieve('app.name'),
             $this->app->retrieve('app.version'),
-        ], $yaml);
+        ], $output);
 
-        $this->app->response->mime = 'text';
+        $this->app->response->mime = $format === 'json' ? 'json' : 'text';
 
-        return $yaml;
+        return $output;
     }
 
     public function restApiViewer() {
@@ -183,15 +188,12 @@ class Api extends App {
         $this->helper('session')->close();
 
         $apiKey = $this->param('apiKey');
-        $bgColor = $this->param('bgColor');
-        $primaryColor = $this->param('primaryColor');
-        $textColor = $this->param('textColor');
 
-        $this->layout = 'app:layouts/raw.php';
+        $this->layout = 'app:layouts/canvas.php';
 
-        $openApiUrl = $this->param('specUrl', $this->app->routeUrl('/system/api/openapi'));
+        $openApiUrl = $this->param('specUrl', $this->app->routeUrl('/system/api/openapi?format=json'));
 
-        return $this->render('system:views/api/rest-api-viewer.php', compact('openApiUrl', 'apiKey', 'bgColor', 'primaryColor', 'textColor'));
+        return $this->render('system:views/api/rest-api-viewer.php', \compact('openApiUrl', 'apiKey'));
     }
 
     public function graphqlViewer() {
@@ -205,7 +207,7 @@ class Api extends App {
 
         $this->layout = 'app:layouts/raw.php';
 
-        return $this->render('system:views/api/graphql-viewer.php', compact('apiKey', 'bgColor', 'primaryColor', 'textColor'));
+        return $this->render('system:views/api/graphql-viewer.php', \compact('apiKey', 'bgColor', 'primaryColor', 'textColor'));
     }
 
     protected function cache() {

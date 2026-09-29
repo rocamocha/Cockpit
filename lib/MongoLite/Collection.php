@@ -63,6 +63,8 @@ class Collection {
      */
     public function insert(array &$document): mixed {
 
+        $result = null;
+
         if (isset($document[0])) {
 
             $this->database->connection->beginTransaction();
@@ -79,10 +81,16 @@ class Collection {
                 }
             }
             $this->database->connection->commit();
-            return \count($document);
+            $result = \count($document);
         } else {
-            return $this->_insert($document);
+            $result = $this->_insert($document);
         }
+
+        if ($result) {
+            $this->database->invalidateSortOptimizationCache($this->name);
+        }
+
+        return $result;
     }
     /**
      * Insert document
@@ -96,11 +104,15 @@ class Collection {
         $table = $this->getSanitizedCollectionName();
         $document['_id'] = isset($document['_id']) ? $document['_id'] : createMongoDbLikeId();
         
+<<<<<<< HEAD
         // Encode document with error handling
         $json = \json_encode($document, JSON_UNESCAPED_UNICODE);
         if ($json === false) {
             throw new \RuntimeException('Failed to encode document: ' . json_last_error_msg());
         }
+=======
+        $json = $this->encodeDocument($document, 'Failed to encode document');
+>>>>>>> develop
         $data = ['document' => $json];
 
         $fields = [];
@@ -121,7 +133,11 @@ class Collection {
             return $document['_id'];
         } else {
             $errorInfo = $this->database->connection->errorInfo();
+<<<<<<< HEAD
             throw new \PDOException('SQL Error: ' . implode(', ', $errorInfo) . " - Query: " . $sql, (int)$errorInfo[1]);
+=======
+            throw new \PDOException('SQL Error: ' . \implode(', ', $errorInfo) . " - Query: " . $sql, (int)$errorInfo[1]);
+>>>>>>> develop
         }
     }
 
@@ -188,11 +204,15 @@ class Collection {
                     $document = $this->applyUpdateOperators($_doc, $data, $merge);
                     $document['_id'] = $_doc['_id'];
 
+<<<<<<< HEAD
                     // Encode document with error handling
                     $json = json_encode($document, JSON_UNESCAPED_UNICODE);
                     if ($json === false) {
                         throw new \RuntimeException('Failed to encode document during update: ' . json_last_error_msg());
                     }
+=======
+                    $json = $this->encodeDocument($document, 'Failed to encode document during update');
+>>>>>>> develop
                     
                     $sql = "UPDATE `{$sanitizedName}` SET document=".$conn->quote($json)." WHERE id=".(int)$doc['id'];
 
@@ -206,7 +226,193 @@ class Collection {
             }
         }
 
-        return count($result);
+        if (\count($result) > 0) {
+            $this->database->invalidateSortOptimizationCache($this->name);
+        }
+
+        return \count($result);
+    }
+
+    /**
+     * Apply update operators to a document
+     *
+     * @param array $document The original document
+     * @param array $updates The update operations
+     * @param bool $merge Whether to merge or replace (for backward compatibility)
+     * @return array The updated document
+     */
+    protected function applyUpdateOperators(array $document, array $updates, bool $merge = true): array {
+        // Check if we have update operators
+        $hasOperators = false;
+        foreach ($updates as $key => $value) {
+            if (\str_starts_with($key, '$')) {
+                $hasOperators = true;
+                break;
+            }
+        }
+        
+        // If no operators and not merging, replace the document
+        if (!$hasOperators && !$merge) {
+            return $updates;
+        }
+        
+        // If no operators and merging, treat as $set
+        if (!$hasOperators && $merge) {
+            // Use ValueAccessor for proper dot-notation support in shallow merge
+            foreach ($updates as $field => $value) {
+                ValueAccessor::set($document, $field, $value);
+            }
+            return $document;
+        }
+        
+        // Process each operator
+        foreach ($updates as $operator => $fields) {
+            switch ($operator) {
+                case '$set':
+                    // Set or update fields using ValueAccessor for proper dot-notation
+                    if (is_array($fields)) {
+                        foreach ($fields as $field => $value) {
+                            ValueAccessor::set($document, $field, $value);
+                        }
+                    }
+                    break;
+                    
+                case '$unset':
+                    // Remove fields using ValueAccessor for proper dot-notation
+                    if (is_array($fields)) {
+                        foreach ($fields as $field => $value) {
+                            // MongoDB uses any truthy value to unset
+                            if ($value) {
+                                ValueAccessor::unset($document, $field);
+                            }
+                        }
+                    }
+                    break;
+                    
+                case '$inc':
+                    // Increment numeric fields with dot-notation support
+                    if (\is_array($fields)) {
+                        foreach ($fields as $field => $increment) {
+                            if (\is_numeric($increment)) {
+                                $current = ValueAccessor::get($document, $field, 0);
+                                if (\is_numeric($current)) {
+                                    ValueAccessor::set($document, $field, $current + $increment);
+                                } else {
+                                    throw new \InvalidArgumentException("Cannot increment non-numeric field: {$field}");
+                                }
+                            }
+                        }
+                    }
+                    break;
+                    
+                case '$push':
+                    // Append to array fields with dot-notation support
+                    if (\is_array($fields)) {
+                        foreach ($fields as $field => $value) {
+                            $current = ValueAccessor::get($document, $field);
+                            if ($current === null) {
+                                $current = [];
+                            }
+                            if (!\is_array($current)) {
+                                throw new \InvalidArgumentException("Cannot push to non-array field: {$field}");
+                            }
+                            // Handle $each modifier
+                            if (\is_array($value) && isset($value['$each']) && \is_array($value['$each'])) {
+                                foreach ($value['$each'] as $item) {
+                                    $current[] = $item;
+                                }
+                            } else {
+                                $current[] = $value;
+                            }
+                            ValueAccessor::set($document, $field, $current);
+                        }
+                    }
+                    break;
+                    
+                case '$addToSet':
+                    // Add to array only if not already present with dot-notation support
+                    if (\is_array($fields)) {
+                        foreach ($fields as $field => $value) {
+                            $current = ValueAccessor::get($document, $field);
+                            if ($current === null) {
+                                $current = [];
+                            }
+                            if (!\is_array($current)) {
+                                throw new \InvalidArgumentException("Cannot addToSet to non-array field: {$field}");
+                            }
+                            // Handle $each modifier
+                            if (\is_array($value) && isset($value['$each']) && \is_array($value['$each'])) {
+                                foreach ($value['$each'] as $item) {
+                                    if (!$this->arrayContainsValue($current, $item)) {
+                                        $current[] = $item;
+                                    }
+                                }
+                            } else {
+                                if (!$this->arrayContainsValue($current, $value)) {
+                                    $current[] = $value;
+                                }
+                            }
+                            ValueAccessor::set($document, $field, $current);
+                        }
+                    }
+                    break;
+                    
+                default:
+                    // Unknown operator - for backward compatibility with $set behavior
+                    if (\str_starts_with($operator, '$')) {
+                        // Ignore unknown operators
+                    } else if ($merge) {
+                        // If not an operator and merge is true, treat as field to set
+                        $document[$operator] = $fields;
+                    }
+                    break;
+            }
+        }
+        
+        return $document;
+    }
+    
+    /**
+     * Check if an array contains a value (deep comparison for arrays/objects)
+     */
+    protected function arrayContainsValue(array $array, mixed $value): bool {
+        foreach ($array as $item) {
+            if ($this->valuesEqual($item, $value)) {
+                return true;
+            }
+        }
+        return false;
+    }
+    
+    /**
+     * Compare two values for equality (deep comparison for arrays)
+     */
+    protected function valuesEqual(mixed $a, mixed $b): bool {
+        if (\is_array($a) && \is_array($b)) {
+            return \json_encode($a) === \json_encode($b);
+        }
+        return $a === $b;
+    }
+
+    /**
+     * Encode a document for SQLite storage.
+     */
+    protected function encodeDocument(array $document, string $errorPrefix): string {
+        $json = \json_encode($document, JSON_UNESCAPED_UNICODE);
+
+        if ($json !== false) {
+            return $json;
+        }
+
+        if (\json_last_error() === JSON_ERROR_RECURSION) {
+            $json = \json_encode($document, JSON_UNESCAPED_UNICODE | JSON_PARTIAL_OUTPUT_ON_ERROR);
+
+            if ($json !== false) {
+                return $json;
+            }
+        }
+
+        throw new \RuntimeException($errorPrefix . ': ' . \json_last_error_msg());
     }
 
     /**
@@ -396,6 +602,10 @@ class Collection {
 
         $this->database->unregisterCriteriaFunction($criteriaFnId);
 
+        if ($result) {
+            $this->database->invalidateSortOptimizationCache($this->name);
+        }
+
         return $result;
     }
 
@@ -424,6 +634,7 @@ class Collection {
         if (!$criteria) {
             $stmt = $this->database->connection->query("SELECT COUNT(*) AS C FROM `{$sanitizedName}`");
         } else {
+<<<<<<< HEAD
             // Register and sanitize criteria
             $criteriaId = $this->database->registerCriteriaFunction($criteria);
             $sanitizedCriteriaId = $this->database->sanitizeCriteriaId($criteriaId);
@@ -441,6 +652,34 @@ class Collection {
         
         $res = $stmt->fetch(\PDO::FETCH_ASSOC);
         return intval(isset($res['C']) ? $res['C'] : 0);
+=======
+            // Try to optimize query
+            $optimizer = $this->database->getQueryOptimizer();
+            $criteriaSql = \is_array($criteria) ? $optimizer->optimize($criteria) : null;
+
+            if ($criteriaSql) {
+                $sql = "SELECT COUNT(*) AS C FROM `{$sanitizedName}` WHERE {$criteriaSql}";
+                $stmt = $this->database->connection->query($sql);
+            } else {
+                // Register and sanitize criteria
+                $criteriaId = $this->database->registerCriteriaFunction($criteria);
+                $sanitizedCriteriaId = $this->database->sanitizeCriteriaId($criteriaId);
+                
+                if (!$sanitizedCriteriaId) {
+                    throw new \InvalidArgumentException("Invalid criteria function ID");
+                }
+                
+                $sql = "SELECT COUNT(*) AS C FROM `{$sanitizedName}` WHERE document_criteria('{$sanitizedCriteriaId}', document)";
+                $stmt = $this->database->connection->query($sql);
+                
+                // Unregister criteria to prevent memory leaks
+                $this->database->unregisterCriteriaFunction($criteriaId);
+            }
+        }
+        
+        $res = $stmt->fetch(\PDO::FETCH_ASSOC);
+        return \intval(isset($res['C']) ? $res['C'] : 0);
+>>>>>>> develop
     }
 
     /**
@@ -457,7 +696,11 @@ class Collection {
         $stmt = $this->database->connection->query("SELECT COUNT(*) AS C FROM `{$sanitizedName}`");
         $res = $stmt->fetch(\PDO::FETCH_ASSOC);
         
+<<<<<<< HEAD
         return intval(isset($res['C']) ? $res['C'] : 0);
+=======
+        return \intval(isset($res['C']) ? $res['C'] : 0);
+>>>>>>> develop
     }
 
     /**
@@ -467,7 +710,19 @@ class Collection {
      * @return Cursor Cursor
      */
     public function find(mixed $criteria = null, ?array $projection = null): Cursor {
-        return new Cursor($this, $this->database->registerCriteriaFunction($criteria), $projection);
+        $criteriaSql = null;
+        $criteriaFn = null;
+
+        if (\is_array($criteria)) {
+            $optimizer = $this->database->getQueryOptimizer();
+            $criteriaSql = $optimizer->optimize($criteria);
+        }
+
+        if ($criteriaSql === null) {
+            $criteriaFn = $this->database->registerCriteriaFunction($criteria);
+        }
+
+        return new Cursor($this, $criteriaFn, $projection, $criteriaSql);
     }
 
     /**
@@ -484,13 +739,101 @@ class Collection {
     }
 
     /**
-     * Data aggregation
+     * Data aggregation with native SQLite optimization
      *
      * @param  array $pipeline
-     * @return Aggregation\Cursor
+     * @return Aggregation\Cursor|Aggregation\NativeCursor
      */
-    public function aggregate(array $pipeline): Aggregation\Cursor {
-        return new Aggregation\Cursor($this, $pipeline);
+    public function aggregate(array $pipeline): Aggregation\Cursor|Aggregation\NativeCursor {
+        if (empty($pipeline)) {
+            return new Aggregation\Cursor($this, $pipeline);
+        }
+
+        // Try to optimize the aggregation pipeline to native SQLite
+        $optimizer = $this->database->getAggregationOptimizer();
+        $tableName = $this->getSanitizedCollectionName();
+
+        if (!$tableName) {
+            return new Aggregation\Cursor($this, $pipeline);
+        }
+
+        $optimizer->setTableName($tableName);
+
+        // Try partial optimization - optimize what we can, PHP handles the rest
+        [$sql, $remainingPipeline, $optimizedCount] = $optimizer->optimizePartial($pipeline);
+
+        if ($optimizedCount === 0) {
+            // No stages could be optimized - fall back to PHP implementation
+            return new Aggregation\Cursor($this, $pipeline);
+        }
+
+        // Execute optimized SQL
+        try {
+            $stmt = $this->database->connection->query($sql);
+            $rows = $stmt->fetchAll(\PDO::FETCH_ASSOC);
+
+            // Detect if pipeline contains a $count stage
+            $countFieldName = null;
+            foreach ($pipeline as $stage) {
+                if (isset($stage['$count'])) {
+                    $countFieldName = $stage['$count'];
+                    break;
+                }
+            }
+
+            // Convert rows to documents
+            $docs = [];
+            foreach ($rows as $row) {
+                if (isset($row['document'])) {
+                    // Document column - decode JSON
+                    $doc = \is_string($row['document'])
+                        ? \json_decode($row['document'], true)
+                        : $row['document'];
+                    $docs[] = $doc;
+                } else {
+                    // Grouped/projected result - convert to document format
+                    $doc = [];
+                    foreach ($row as $key => $value) {
+                        // Handle JSON columns
+                        if (\is_string($value) && \strlen($value) > 0 && ($value[0] === '{' || $value[0] === '[')) {
+                            $decoded = \json_decode($value, true);
+                            if (\json_last_error() === JSON_ERROR_NONE) {
+                                $value = $decoded;
+                            }
+                        }
+                        // Convert numeric strings to numbers where appropriate
+                        if (\is_string($value) && \is_numeric($value)) {
+                            $value = \strpos($value, '.') !== false ? (float)$value : (int)$value;
+                        }
+                        $doc[$key] = $value;
+                    }
+                    $docs[] = $doc;
+                }
+            }
+
+            // MongoDB behavior: $count on empty collection returns empty array, not [{field: 0}]
+            if ($countFieldName !== null && \count($docs) === 1) {
+                $countValue = $docs[0][$countFieldName] ?? null;
+                if ($countValue === 0) {
+                    $docs = [];
+                }
+            }
+
+            if (empty($remainingPipeline)) {
+                // Fully optimized - return native cursor
+                return new Aggregation\NativeCursor($docs);
+            }
+
+            // Partial optimization - run remaining stages through PHP
+            return new Aggregation\Cursor(
+                new Aggregation\DocumentSource($docs),
+                $remainingPipeline
+            );
+
+        } catch (\Exception $e) {
+            // SQL execution failed - fall back to PHP implementation
+            return new Aggregation\Cursor($this, $pipeline);
+        }
     }
 
     /**
@@ -501,18 +844,20 @@ class Collection {
      */
     public function renameCollection(string $newname): bool {
 
-        if (!in_array($newname, $this->database->getCollectionNames())) {
+        if (!\in_array($newname, $this->database->getCollectionNames())) {
 
             // Sanitize both old and new collection names
             $sanitizedOldName = $this->getSanitizedCollectionName();
             
-            $sanitizedNewName = preg_replace('/[^a-zA-Z0-9_-]/', '', $newname);
+            $sanitizedNewName = \preg_replace('/[^a-zA-Z0-9_-]/', '', $newname);
             if ($sanitizedNewName !== $newname || empty($sanitizedNewName)) {
                 throw new \InvalidArgumentException("Invalid new collection name: {$newname}");
             }
             
             $this->database->connection->exec("ALTER TABLE `{$sanitizedOldName}` RENAME TO `{$sanitizedNewName}`");
+            $this->database->invalidateSortOptimizationCache($this->name);
             $this->name = $newname;
+            $this->database->invalidateSortOptimizationCache($this->name);
 
             return true;
         }

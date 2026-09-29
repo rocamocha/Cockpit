@@ -48,9 +48,12 @@ export default {
         stateText() {
             return this.state === null ? this.t('All') : this.state === 1 ? this.t('Published') : this.t('Unpublished');
         },
+<<<<<<< HEAD
         limit() {
             this.load();
         }
+=======
+>>>>>>> develop
     },
 
     watch: {
@@ -204,16 +207,28 @@ export default {
                     <li :active="mode == 'all' ? 'false':'true'"><a class="kiss-tabs-nav-link"  @click="mode='byme'">{{ t('By me') }}</a></li>
                 </ul>
 
+<<<<<<< HEAD
                 <span class="kiss-badge kiss-overlay-input" :class="{'kiss-bgcolor-success': state === 1, 'kiss-bgcolor-danger': state === 0}">
                     {{ stateText }}
                     <icon size="large">arrow_drop_down</icon>
+=======
+                <div class="kiss-overlay-input">
+                    <span class="kiss-badge" :class="{'kiss-bgcolor-success': state === 1, 'kiss-bgcolor-danger': state === 0}">
+                        {{ stateText }}
+                        <icon size="large">arrow_drop_down</icon>
+                    </span>
+>>>>>>> develop
                     <select v-model="state">
                         <option :value="null">{{ t('All') }}</option>
                         <hr>
                         <option :value="1">{{ t('Published') }}</option>
                         <option :value="0">{{ t('Unpublished') }}</option>
                     </select>
+<<<<<<< HEAD
                 </span>
+=======
+                </div>
+>>>>>>> develop
             </div>
 
             <div class="kiss-padding-large" v-if="loading"><app-loader size="small"></app-loader></div>

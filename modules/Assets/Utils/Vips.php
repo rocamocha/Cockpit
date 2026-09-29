@@ -34,12 +34,35 @@ class Vips {
         if (!in_array($options['smartcrop'], ['attention', 'centre', 'center', 'entropy', 'low', 'high'])) {
             $options['smartcrop'] = 'attention';
         }
+<<<<<<< HEAD
 
         $options['quality'] = intval($options['quality']);
 
         $command = "{$this->binary} '{$options['src']}' --size {$options['size']} --smartcrop {$options['smartcrop']} -o '{$dest}[Q={$options['quality']}]'";
+=======
+>>>>>>> develop
 
-        $process = Process::fromShellCommandline($command);
+        $options['quality'] = intval($options['quality']);
+
+        $process = new Process([
+            $this->binary,
+            $this->normalizeArgument($options['src'], 'src'),
+            '--size',
+            $this->normalizeArgument($options['size'], 'size'),
+            '--smartcrop',
+            $options['smartcrop'],
+            '-o',
+            "{$dest}[Q={$options['quality']}]"
+        ]);
         $process->run();
+    }
+
+    protected function normalizeArgument(mixed $value, string $name): string {
+
+        if (\is_bool($value) || \is_array($value) || \is_object($value) || \is_resource($value) || $value === null) {
+            throw new \InvalidArgumentException("Invalid VIPS argument value for {$name}");
+        }
+
+        return (string)$value;
     }
 }

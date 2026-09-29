@@ -65,8 +65,9 @@ $this->on('restApi.config', function($restApi) {
         'GET' => function($params, $app) {
 
             $model = $params['model'];
+            $_model = $app->module('content')->model($model);
 
-            if (!$app->module('content')->model($model)) {
+            if (!$_model) {
                 $app->response->status = 404;
                 return ['error' => "Model <{$model}> not found"];
             }
@@ -114,7 +115,21 @@ $this->on('restApi.config', function($restApi) {
                 $process['user'] = $app->helper('auth')->getUser();
             }
 
-            $item = $app->module('content')->item($model, $filter, $fields, $process);
+            if ($_model['type'] == 'singleton') {
+                
+                if (!empty($fields)) {
+                    $fields['_state'] = 1;
+                }
+     
+                $item = $app->module('content')->item($model, $filter, $fields, $process);
+
+                if ($item && $item['_state'] != 1) {
+                    $item = null;
+                }
+
+            } else {
+                $item = $app->module('content')->item($model, $filter, $fields, $process);
+            }
 
             if ($item) {
                 $app->trigger('content.api.item', [&$item, $model]);
@@ -504,6 +519,7 @@ $this->on('restApi.config', function($restApi) {
 
             $items = $app->module('content')->items($model, $options, $process);
 
+<<<<<<< HEAD
 	    if (isset($options['skip'], $options['limit'])) {
 		if ($options['total']) {
 		    return $app->module('content')->count($model, $options['filter'] ?? []);
@@ -520,6 +536,24 @@ $this->on('restApi.config', function($restApi) {
 	    if ($options['total']) {
 		return count($items);
 	    }
+=======
+            if (count($items)) {
+                $app->trigger('content.api.items', [&$items, $model]);
+            }
+
+            if (isset($options['skip'], $options['limit'])) {
+                return [
+                    'data' => $items,
+                    'meta' => [
+                        'total' => $app->module('content')->count($model, $options['filter'] ?? [])
+                    ]
+                ];
+            }
+
+            if (count($items)) {
+                $app->trigger('content.api.items', [&$items, $model]);
+            }
+>>>>>>> develop
 
             return $items;
         }
@@ -749,12 +783,23 @@ $this->on('restApi.config', function($restApi) {
 
             $pipeline = array_merge([['$match' => ['_state' => 1]]], $pipeline);
 
-            $process = ['locale' => $app->param('locale', 'default')];
+            // Security check: Disable $out and $merge stages
+            foreach ($pipeline as $stage) {
+                $cmd = array_key_first($stage);
+                if (in_array($cmd, ['$out', '$merge'])) {
+                    $app->response->status = 400;
+                    return ['error' => "The {$cmd} aggregation stage is not allowed via the API."];
+                }
+            }
+
+            $process = [
+                'locale' => $app->param('locale', 'default'),
+                'user' => $app->helper('auth')->getUser(),
+            ];
             $populate = $app->param('populate:int', null);
 
             if ($populate) {
                 $process['populate'] = $populate;
-                $process['user'] = $app->helper('auth')->getUser();
             }
 
             $items = $app->module('content')->aggregate($model['name'], $pipeline, $process);

@@ -12,6 +12,9 @@ if (!isset($user['_meta']) || (is_array($user['_meta']) && array_is_list($user['
     $user['_meta'] = new ArrayObject([]);
 }
 
+usort($languages, function($a, $b) {
+    return strcasecmp($a['language'], $b['language']);
+});
 ?>
 <kiss-container class="kiss-margin-small" size="small">
 
@@ -36,7 +39,7 @@ if (!isset($user['_meta']) || (is_array($user['_meta']) && array_is_list($user['
                 <div>
                     <app-avatar size="50" :name="user.name"></app-avatar>
                 </div>
-                <div class="kiss-margin-left kiss-flex-1">
+                <div class="kiss-margin-start kiss-flex-1">
                     <div class="kiss-text-bold">{{user.name}}</div>
                     <div class="kiss-color-muted kiss-size-small"><span class="kiss-color-primary">{{user.user}}</span> &bullet; {{user.email}}</div>
                 </div>
@@ -72,17 +75,19 @@ if (!isset($user['_meta']) || (is_array($user['_meta']) && array_is_list($user['
                     </div>
 
                     <div class="kiss-margin">
-                        <label><?= t('User') ?> <icon class="kiss-size-5 kiss-color-danger kiss-margin-xsmall-left" title="Required">trip_origin</icon></label>
+                        <label><?= t('User') ?> <icon class="kiss-size-5 kiss-color-danger kiss-margin-xsmall-start" title="Required">trip_origin</icon></label>
                         <input class="kiss-input" type="text" v-model="user.user" autocomplete="off" required>
                     </div>
 
                     <div class="kiss-margin">
-                        <label><?= t('Email') ?> <icon class="kiss-size-5 kiss-color-danger kiss-margin-xsmall-left" title="Required">trip_origin</icon></label>
+                        <label><?= t('Email') ?> <icon class="kiss-size-5 kiss-color-danger kiss-margin-xsmall-start" title="Required">trip_origin</icon></label>
                         <input class="kiss-input" type="email" v-model="user.email" autocomplete="off" required>
                     </div>
 
+                    <hr class="kiss-margin-large">
+
                     <div class="kiss-margin">
-                        <label><?= t('Password') ?> <icon class="kiss-size-5 kiss-color-danger kiss-margin-xsmall-left" title="Required" v-if="!user._id">trip_origin</icon></label>
+                        <label><?= t('Password') ?> <icon class="kiss-size-5 kiss-color-danger kiss-margin-xsmall-start" title="Required" v-if="!user._id">trip_origin</icon></label>
                         <input class="kiss-input" type="password" v-model="user.password" :placeholder="user._id ? '<?= t('Keep current password') ?>':''" :required="!user._id" autocomplete="off">
                     </div>
 
@@ -108,14 +113,14 @@ if (!isset($user['_meta']) || (is_array($user['_meta']) && array_is_list($user['
                     <kiss-card class="kiss-margin kiss-margin-large-top kiss-padding" :theme="user.apiKey ? 'bordered contrast':'bordered'">
                         <label><?= t('API Key') ?></label>
                         <div class="kiss-flex kiss-flex-middle">
-                            <div class="kiss-flex-1 kiss-margin-small-right kiss-text-truncate kiss-disabled">
+                            <div class="kiss-flex-1 kiss-margin-small-end kiss-text-truncate kiss-disabled">
                                 <span class="kiss-text-caption" v-if="!user.apiKey"><?= t('No api key created yet') ?></span>
                                 <span class="kiss-text-monospace kiss-text-bold" v-if="user.apiKey">{{ user.apiKey }}</span>
                             </div>
                             <a @click="generateToken">
                                 <icon>refresh</icon>
                             </a>
-                            <a class="kiss-margin-small-left" v-if="user.apiKey" @click="copyToken">
+                            <a class="kiss-margin-small-start" v-if="user.apiKey" @click="copyToken">
                                 <icon>content_copy</icon>
                             </a>
                         </div>
@@ -127,7 +132,7 @@ if (!isset($user['_meta']) || (is_array($user['_meta']) && array_is_list($user['
                             <field-boolean class="kiss-size-3" v-model="user.twofa.enabled"></field-boolean>
                         </div>
                         <kiss-row class="kiss-margin animated fadeIn" v-if="user.twofa.enabled">
-                            <div><img src="<?= $this->route("/system/users/getSecretQRCode/{$user['twofa']['secret']}/150") ?>" width="150" height="150" loading="lazy" style="background:#fff;border:10px #fff solid;"></div>
+                            <div><img src="<?= $this->route("/system/users/getSecretQRCode/{$this->escape($user['twofa']['secret'])}/150") ?>" width="150" height="150" loading="lazy" style="background:#fff;border:10px #fff solid;"></div>
                             <div class="kiss-flex-1">
 
                                 <p class="kiss-text-monospace kiss-color-muted">
@@ -137,7 +142,7 @@ if (!isset($user['_meta']) || (is_array($user['_meta']) && array_is_list($user['
 
                                 <kiss-card class="kiss-padding-small kiss-flex" theme="bordered" gap="small">
                                     <div class="kiss-flex-1 kiss-text-monospace kiss-text-bold kiss-text-truncate">
-                                        <?= $user['twofa']['secret'] ?>
+                                        <?= $this->escape($user['twofa']['secret']) ?>
                                     </div>
                                     <a :title="t('Copy')" @click="copyTwofaSecret"><icon>content_copy</icon></a>
                                 </kiss-card>
@@ -184,7 +189,7 @@ if (!isset($user['_meta']) || (is_array($user['_meta']) && array_is_list($user['
                 <app-actionbar>
 
                     <kiss-container size="small">
-                        <div class="kiss-flex kiss-flex-middle kiss-flex-right">
+                        <div class="kiss-flex kiss-flex-middle kiss-flex-end">
                             <div class="kiss-button-group">
                                 <?php if (!$isAccountView && $this->helper('acl')->isAllowed('app.users.manage')) : ?>
                                     <a class="kiss-button" href="<?= $this->route('/system/users') ?>">
@@ -286,11 +291,11 @@ if (!isset($user['_meta']) || (is_array($user['_meta']) && array_is_list($user['
                             return;
                         }
 
-                        App.ui.prompt('Action verification', '', (pwd) => {
+                        App.ui.prompt(this.t('Action verification'), '', (pwd) => {
                             sendRequest(pwd);
                         }, {
                             type: 'password',
-                            info: 'Please enter your password to verify this action'
+                            info: this.t('Please enter your password to verify this action')
                         });
                     }
                 }

@@ -11,8 +11,8 @@
             </div>
 
             <div class="kiss-flex kiss-flex-middle">
-                <div class="kiss-margin-small-right">
-                    <app-avatar size="40" name="<?=$this->escape($meta['user']['name'])?>">
+                <div class="kiss-margin-small-end">
+                    <app-avatar class="kiss-display-block" size="40" name="<?=$this->escape($meta['user']['name'])?>">
                         <canvas width="40" height="40"></canvas>
                     </app-avatar>
                 </div>

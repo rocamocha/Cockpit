@@ -9,6 +9,7 @@ $this->helpers['csrf']  = 'App\\Helper\\Csrf';
 $this->helpers['i18n']  = 'App\\Helper\\i18n';
 $this->helpers['rspc']  = 'App\\Helper\\ResponseCache';
 $this->helpers['jwt']   = 'App\\Helper\\JWT';
+$this->helpers['script'] = 'App\\Helper\\Script';
 
 include_once(__DIR__.'/functions.php');
 
@@ -38,7 +39,8 @@ $this->on('app.api.request', function($request) {
                 $response->mime = 'json';
                 $response->body = json_encode(['error' => 'Not allowed']);
                 $response->flush();
-                exit;
+                $response->flush();
+                $this->app->stop();
             }
         }
     }
