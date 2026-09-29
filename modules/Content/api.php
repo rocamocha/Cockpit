@@ -523,22 +523,14 @@ $this->on('restApi.config', function($restApi) {
                 $app->trigger('content.api.items', [&$items, $model]);
             }
 
-	    if (isset($options['skip'], $options['limit'])) {
-		if ($options['total']) {
-		    return $app->module('content')->count($model, $options['filter'] ?? []);
-		} else {
-                    return [
-                        'data' => $items,
-                        'meta' => [
-                            'total' => $app->module('content')->count($model, $options['filter'] ?? [])
-                        ]
-                    ];
-		}
+            if (isset($options['skip'], $options['limit'])) {
+                return [
+                    'data' => $items,
+                    'meta' => [
+                        'total' => $app->module('content')->count($model, $options['filter'] ?? [])
+                    ]
+                ];
             }
-
-	    if ($options['total']) {
-		return count($items);
-	    }
 
             if (count($items)) {
                 $app->trigger('content.api.items', [&$items, $model]);
